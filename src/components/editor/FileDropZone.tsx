@@ -183,8 +183,8 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
             </div>
 
             <div className="flex flex-wrap gap-1 justify-center">
-              {Object.values(ACCEPTED_TYPES).map(ext => (
-                <Badge key={ext} variant="secondary" className="text-xs">
+              {Object.entries(ACCEPTED_TYPES).map(([mime, ext]) => (
+                <Badge key={mime} variant="secondary" className="text-xs">
                   {ext}
                 </Badge>
               ))}

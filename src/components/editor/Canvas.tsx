@@ -1,3 +1,4 @@
+/** @jsxImportSource @pixi/react */
 import React from 'react';
 import { Application } from '@pixi/react';
 import { useProjectionStore } from '@/store/projectionStore';
@@ -9,16 +10,16 @@ const Canvas: React.FC = () => {
   const selectedSurfaceId = useProjectionStore(state => state.selectedSurfaceId);
 
   return (
-    <div className="canvas-container">
+    <div className="canvas-container flex-1 w-full h-full bg-[var(--canvas-bg)] relative overflow-hidden">
       <Application
-        width={window.innerWidth - 280} // Account for sidebar
-        height={window.innerHeight - 48} // Account for topbar
+        width={undefined}
+        height={undefined}
         backgroundAlpha={1}
         backgroundColor={0x000000}
         antialias={true}
         resolution={window.devicePixelRatio || 1}
         autoDensity={true}
-        resizeTo={document.querySelector('.canvas-container') as HTMLElement}
+        resizeTo={typeof window !== 'undefined' ? window : undefined}
       >
         {Object.values(surfaces).map(surface => (
           <WarpableQuadLayer
@@ -28,9 +29,10 @@ const Canvas: React.FC = () => {
           />
         ))}
       </Application>
-      
       {/* File drop zone overlay */}
-      <FileDropZone />
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+        <FileDropZone />
+      </div>
     </div>
   );
 };

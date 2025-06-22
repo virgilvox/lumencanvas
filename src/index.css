@@ -1,16 +1,14 @@
-/* Import LumenCanvas Theme */
-@import './styles/theme.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* Tailwind Base */
-@import "tailwindcss";
-
-/* Force dark theme */
 html {
   color-scheme: dark;
 }
 
-/* Ensure our theme variables take precedence */
 @layer base {
+  @import './styles/theme.css';
+
   :root {
     /* Map Tailwind variables to our theme */
     --background: var(--bg);
@@ -29,7 +27,6 @@ html {
     --accent-foreground: var(--bg);
     --destructive: #ff3333;
     --destructive-foreground: var(--text);
-    --border: var(--border);
     --input: var(--border);
     --ring: var(--accent);
     --radius: 0.25rem;
@@ -40,12 +37,9 @@ html {
     --chart-5: 27 87% 67%;
   }
   
-  * {
-    @apply border-border;
-  }
-  
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }

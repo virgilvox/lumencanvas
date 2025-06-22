@@ -16,7 +16,6 @@ import type { Layer, LayerType } from '@/types/store';
 import { CodeEditor } from './CodeEditor';
 
 const Sidebar: React.FC = () => {
-  const [activeSection, setActiveSection] = React.useState<'layers' | 'scenes' | 'assets'>('layers');
   const [codeEditorOpen, setCodeEditorOpen] = React.useState(false);
   const [editingLayer, setEditingLayer] = React.useState<Layer | null>(null);
   
@@ -82,169 +81,95 @@ const Sidebar: React.FC = () => {
 
   return (
     <>
-      <aside className="sidebar">
-        {/* Section Tabs */}
-        <div className="flex border-b border-[var(--border)]">
-          <button
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeSection === 'layers' 
-                ? 'text-[var(--accent)] border-b-2 border-[var(--accent)]' 
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-            onClick={() => setActiveSection('layers')}
-          >
-            Layers
-          </button>
-          <button
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeSection === 'scenes' 
-                ? 'text-[var(--accent)] border-b-2 border-[var(--accent)]' 
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-            onClick={() => setActiveSection('scenes')}
-          >
-            Scenes
-          </button>
-          <button
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeSection === 'assets' 
-                ? 'text-[var(--accent)] border-b-2 border-[var(--accent)]' 
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-            onClick={() => setActiveSection('assets')}
-          >
-            Assets
-          </button>
-        </div>
-
-        {/* Section Content */}
-        <div className="sidebar-content">
-          {/* Layers Section */}
-          {activeSection === 'layers' && (
-            <div>
-              <div className="sidebar-header">
-                <span>Layers</span>
-                <div className="relative group">
-                  <button className="p-1 hover:bg-[var(--hover)] rounded">
-                    <Plus className="w-4 h-4" />
-                  </button>
-                  <div className="absolute right-0 top-full mt-1 bg-[var(--panel-bg)] border border-[var(--border)] rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                    <button
-                      className="block w-full px-3 py-2 text-sm text-left hover:bg-[var(--hover)]"
-                      onClick={() => handleAddLayer('media')}
-                    >
-                      <Image className="w-4 h-4 inline mr-2" />
-                      Media
-                    </button>
-                    <button
-                      className="block w-full px-3 py-2 text-sm text-left hover:bg-[var(--hover)]"
-                      onClick={() => handleAddLayer('shader')}
-                    >
-                      <Code className="w-4 h-4 inline mr-2" />
-                      Shader
-                    </button>
-                    <button
-                      className="block w-full px-3 py-2 text-sm text-left hover:bg-[var(--hover)]"
-                      onClick={() => handleAddLayer('html')}
-                    >
-                      <FileText className="w-4 h-4 inline mr-2" />
-                      HTML
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-1">
-                {Object.values(layers).map((layer) => (
-                  <div
-                    key={layer.id}
-                    className="sidebar-item group"
-                  >
-                    {getLayerIcon(layer.type)}
-                    <span className="flex-1 truncate">{layer.name}</span>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        className="p-1 hover:bg-[var(--hover)] rounded"
-                        onClick={() => updateLayer(layer.id, { visible: !layer.visible })}
-                      >
-                        {layer.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                      </button>
-                      {(layer.type === 'shader' || layer.type === 'html') && (
-                        <button
-                          className="p-1 hover:bg-[var(--hover)] rounded"
-                          onClick={() => {
-                            setEditingLayer(layer);
-                            setCodeEditorOpen(true);
-                          }}
-                        >
-                          <Code className="w-3 h-3" />
-                        </button>
-                      )}
-                      <button
-                        className="p-1 hover:bg-[var(--hover)] rounded"
-                        onClick={() => removeLayer(layer.id)}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Scenes Section */}
-          {activeSection === 'scenes' && (
-            <div>
-              <div className="sidebar-header">
-                <span>Scenes</span>
-                <button className="p-1 hover:bg-[var(--hover)] rounded">
-                  <Plus className="w-4 h-4" />
+      <aside className="sidebar flex flex-col h-full overflow-y-auto border-r border-[var(--border)] bg-[var(--sidebar-bg)] min-w-[var(--sidebar-width)] max-w-[var(--sidebar-width)]">
+        {/* Layers Section */}
+        <div className="border-b border-[var(--border)] pb-2 mb-2">
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <span className="font-semibold text-[var(--text)] text-sm">Layers</span>
+            <span className="text-xs text-[var(--text-muted)] bg-[var(--panel-bg)] rounded px-2 py-0.5">{Object.keys(layers).length}</span>
+          </div>
+          <div className="flex flex-col gap-1 px-2">
+            {Object.values(layers).map((layer) => (
+              <div
+                key={layer.id}
+                className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-colors text-sm ${layer.visible ? '' : 'opacity-60'} ${editingLayer?.id === layer.id ? 'bg-[var(--surface-selected)] border-l-2 border-[var(--accent)]' : 'hover:bg-[var(--surface-hover)]'}`}
+                onClick={() => {
+                  setEditingLayer(layer);
+                  setCodeEditorOpen(layer.type === 'shader' || layer.type === 'html');
+                }}
+              >
+                {getLayerIcon(layer.type)}
+                <span className="flex-1 truncate">{layer.name}</span>
+                <button
+                  className="p-1 hover:bg-[var(--hover)] rounded"
+                  onClick={e => { e.stopPropagation(); updateLayer(layer.id, { visible: !layer.visible }); }}
+                  title={layer.visible ? 'Hide' : 'Show'}
+                >
+                  {layer.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                </button>
+                <button
+                  className="p-1 hover:bg-[var(--hover)] rounded"
+                  onClick={e => { e.stopPropagation(); removeLayer(layer.id); }}
+                  title="Delete"
+                >
+                  <Trash2 className="w-3 h-3" />
                 </button>
               </div>
-              
-              <div className="space-y-1">
-                {Object.values(scenes).map((scene, index) => (
-                  <div
-                    key={scene.id}
-                    className={`sidebar-item ${scene.id === currentSceneId ? 'selected' : ''}`}
-                    onClick={() => setCurrentScene(scene.id)}
-                  >
-                    <span>Scene {index + 1}</span>
-                    <kbd className="text-[10px] opacity-50">{index + 1}</kbd>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            ))}
+            <button
+              className="flex items-center gap-2 px-2 py-1 mt-2 text-xs text-[var(--accent)] hover:bg-[var(--surface-hover)] rounded transition-colors"
+              onClick={() => handleAddLayer('media')}
+            >
+              <Plus className="w-4 h-4" /> Add Layer
+            </button>
+          </div>
+        </div>
 
-          {/* Assets Section */}
-          {activeSection === 'assets' && (
-            <div>
-              <div className="sidebar-header">
-                <span>Assets</span>
-                <span className="text-[var(--text-muted)] text-xs">
-                  {Object.keys(assets).length} files
-                </span>
+        {/* Scenes Section */}
+        <div className="border-b border-[var(--border)] pb-2 mb-2">
+          <div className="flex items-center justify-between px-4 pt-2 pb-2">
+            <span className="font-semibold text-[var(--text)] text-sm">Scenes</span>
+            <span className="text-xs text-[var(--text-muted)] bg-[var(--panel-bg)] rounded px-2 py-0.5">{Object.keys(scenes).length}</span>
+          </div>
+          <div className="flex flex-col gap-1 px-2">
+            {Object.values(scenes).map((scene, index) => (
+              <div
+                key={scene.id}
+                className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-colors text-sm ${scene.id === currentSceneId ? 'bg-[var(--surface-selected)] border-l-2 border-[var(--accent)]' : 'hover:bg-[var(--surface-hover)]'}`}
+                onClick={() => setCurrentScene(scene.id)}
+              >
+                <span className="flex-1 truncate">Scene {index + 1}</span>
+                <kbd className="text-[10px] opacity-50">{index + 1}</kbd>
               </div>
-              
-              <div className="space-y-1">
-                {Object.values(assets).map((asset) => (
-                  <div key={asset.id} className="asset-item">
-                    {asset.type === 'image' ? (
-                      <Image className="asset-icon" />
-                    ) : (
-                      <Video className="asset-icon" />
-                    )}
-                    <span className="asset-name">{asset.name}</span>
-                    <span className="asset-size">
-                      {asset.size ? formatFileSize(asset.size) : ''}
-                    </span>
-                  </div>
-                ))}
+            ))}
+            <button
+              className="flex items-center gap-2 px-2 py-1 mt-2 text-xs text-[var(--accent)] hover:bg-[var(--surface-hover)] rounded transition-colors"
+              onClick={() => {/* TODO: Add scene logic */}}
+            >
+              <Plus className="w-4 h-4" /> Add Scene
+            </button>
+          </div>
+        </div>
+
+        {/* Assets Section */}
+        <div className="pb-4">
+          <div className="flex items-center justify-between px-4 pt-2 pb-2">
+            <span className="font-semibold text-[var(--text)] text-sm">Assets</span>
+            <span className="text-xs text-[var(--text-muted)] bg-[var(--panel-bg)] rounded px-2 py-0.5">{Object.keys(assets).length}</span>
+          </div>
+          <div className="flex flex-col gap-1 px-2">
+            {Object.values(assets).map((asset) => (
+              <div key={asset.id} className="flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-colors text-sm hover:bg-[var(--surface-hover)]">
+                {asset.type === 'image' ? (
+                  <Image className="w-4 h-4" />
+                ) : (
+                  <Video className="w-4 h-4" />
+                )}
+                <span className="flex-1 truncate">{asset.name}</span>
+                <span className="text-xs text-[var(--text-muted)]">{asset.size ? formatFileSize(asset.size) : ''}</span>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       </aside>
 

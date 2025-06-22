@@ -29,36 +29,38 @@ const TopBar: React.FC = () => {
 
   return (
     <>
-      <header className="topbar">
-        <div className="topbar-logo">LumenCanvas</div>
-        
-        <div className="topbar-actions">
-          {/* Scene Selector */}
+      <header className="topbar flex items-center justify-between h-12 px-6 bg-[var(--bg)] border-b border-[var(--border)] sticky top-0 z-[30] select-none">
+        {/* Logo */}
+        <div className="font-bold text-lg tracking-tight text-[var(--text)]">LumenCanvas</div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          {/* Scene Dropdown */}
           <div className="relative">
-            <button 
-              className="topbar-button"
+            <button
+              className="flex items-center gap-1 px-3 py-1.5 rounded bg-transparent text-sm font-medium text-[var(--text)] hover:bg-[var(--hover)] border border-transparent focus:outline-none focus-visible:border-[var(--accent)]"
               onClick={() => setSceneDropdownOpen(!sceneDropdownOpen)}
             >
               <span>{currentScene?.name || 'Scene 1'}</span>
-              <ChevronDown className="w-4 h-4" />
+              <ChevronDown className="w-4 h-4 opacity-70" />
             </button>
-            
             {sceneDropdownOpen && (
-              <div className="absolute top-full left-0 mt-1 bg-[var(--panel-bg)] border border-[var(--border)] rounded shadow-lg">
-                {/* Scene dropdown content */}
+              <div className="absolute left-0 top-full mt-1 min-w-[120px] bg-[var(--panel-bg)] border border-[var(--border)] rounded shadow-lg z-50">
+                {/* TODO: List scenes for selection */}
+                <div className="px-4 py-2 text-xs text-[var(--text-muted)]">Scene list here</div>
               </div>
             )}
           </div>
 
-          {/* Add Layer */}
-          <button className="topbar-button">
+          {/* +Layer */}
+          <button className="flex items-center gap-1 px-3 py-1.5 rounded bg-transparent text-sm font-medium text-[var(--text)] hover:bg-[var(--hover)] border border-transparent focus:outline-none focus-visible:border-[var(--accent)]">
             <Plus className="w-4 h-4" />
-            <span>Layer</span>
+            <span>+ Layer</span>
           </button>
 
-          {/* Auto-Mask */}
-          <button 
-            className="topbar-button"
+          {/* Mask */}
+          <button
+            className="flex items-center gap-1 px-3 py-1.5 rounded bg-transparent text-sm font-medium text-[var(--text)] hover:bg-[var(--hover)] border border-transparent focus:outline-none focus-visible:border-[var(--accent)]"
             onClick={() => setWebcamMaskingOpen(true)}
           >
             <Camera className="w-4 h-4" />
@@ -67,8 +69,8 @@ const TopBar: React.FC = () => {
           </button>
 
           {/* Shader */}
-          <button 
-            className="topbar-button"
+          <button
+            className="flex items-center gap-1 px-3 py-1.5 rounded bg-transparent text-sm font-medium text-[var(--text)] hover:bg-[var(--hover)] border border-transparent focus:outline-none focus-visible:border-[var(--accent)]"
             onClick={handleNewShaderLayer}
           >
             <Code2 className="w-4 h-4" />
@@ -76,18 +78,21 @@ const TopBar: React.FC = () => {
             <kbd className="ml-1 text-[10px] opacity-50">(F2)</kbd>
           </button>
 
-          {/* Separator */}
-          <div className="w-px h-6 bg-[var(--border)]" />
-
           {/* Preview/Projector */}
-          <button 
-            className="topbar-button"
+          <button
+            className="flex items-center gap-1 px-3 py-1.5 rounded bg-transparent text-sm font-medium text-[var(--text)] hover:bg-[var(--hover)] border border-transparent focus:outline-none focus-visible:border-[var(--accent)]"
             onClick={openProjectorWindow}
           >
             <Monitor className="w-4 h-4" />
             <span>Preview</span>
             <kbd className="ml-1 text-[10px] opacity-50">(P)</kbd>
           </button>
+
+          {/* 60OS and 60 FPS badges */}
+          <span className="ml-2 flex items-center gap-1">
+            <span className="px-2 py-0.5 rounded-full bg-[var(--panel-bg)] text-xs font-medium text-[var(--text-muted)] border border-[var(--border)]">60OS</span>
+            <span className="px-2 py-0.5 rounded-full bg-[var(--panel-bg)] text-xs font-medium text-[var(--text-muted)] border border-[var(--border)]">60 FPS</span>
+          </span>
         </div>
       </header>
 

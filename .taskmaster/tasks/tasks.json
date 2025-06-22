@@ -228,52 +228,59 @@
           5
         ],
         "status": "done",
-                  "subtasks": [
-            {
-              "id": 1,
-              "title": "Setup BroadcastChannel Provider",
-              "description": "Create a BroadcastChannel provider to sync state between editor and popout projection windows in the same browser.",
-              "dependencies": [],
-              "details": "Use BroadcastChannel API to enable instant communication between tabs/windows on the same origin. Create a provider that broadcasts Yjs updates and awareness states.\n<info added on 2025-06-22T09:00:00.000Z>\n✅ Created BroadcastChannelProvider class in src/lib/broadcastChannel.ts:\n- Implements bi-directional sync between browser windows/tabs\n- Handles Yjs document updates automatically\n- Provides sync and status callbacks\n- Prevents broadcast loops with origin tracking\n- Clean destroy method for proper cleanup\n- Created useBroadcastSync hook for React integration\n</info added on 2025-06-22T09:00:00.000Z>",
-              "status": "done",
-              "testStrategy": ""
-            },
-            {
-              "id": 2,
-              "title": "Create Projector Window Opener",
-              "description": "Add a button to open projector view in a new window with BroadcastChannel sync.",
-              "dependencies": [1],
-              "details": "Add a 'Open Projector' button that uses window.open() to create a popout window. Pass necessary parameters via URL to establish sync.\n<info added on 2025-06-22T09:10:00.000Z>\n✅ Added Projector button to TopBar:\n- Uses Monitor icon from lucide-react\n- Opens new window at /projector/local route\n- Window opens at 1280x720 with minimal chrome\n- Shows BroadcastChannel status in tooltip\n- Initializes broadcast sync automatically\n</info added on 2025-06-22T09:10:00.000Z>",
-              "status": "done",
-              "testStrategy": ""
-            },
-                      {
-              "id": 3,
-              "title": "Setup y-websocket Server",
-              "description": "Configure a y-websocket server for remote projection sync across different machines.",
-              "dependencies": [],
-              "details": "Install and configure @y/websocket-server or create a simple WebSocket server using y-websocket utils. Handle multiple rooms for different projects.\n<info added on 2025-06-22T09:30:00.000Z>\n✅ Created WebSocket server in server/websocket-server.js:\n- Uses y-websocket/bin/utils setupWSConnection\n- Handles all Yjs sync protocol automatically\n- Runs on port 1234 by default (configurable via PORT env)\n- Logs connections and handles graceful shutdown\n- Added npm scripts: 'server' and 'server:dev'\n- Ready for multi-room/project sync\n</info added on 2025-06-22T09:30:00.000Z>",
-              "status": "done",
-              "testStrategy": ""
-            },
-            {
-              "id": 4,
-              "title": "Integrate WebSocket Provider",
-              "description": "Add WebSocket provider to both editor and projector views for remote sync.",
-              "dependencies": [3],
-              "details": "Create WebSocket provider instances that connect to the server using project/room IDs. Handle connection status and reconnection logic.\n<info added on 2025-06-22T09:40:00.000Z>\n✅ Created useWebSocketSync hook:\n- Wraps y-websocket WebsocketProvider\n- Configurable server URL and room name\n- Tracks sync and connection status\n- Proper cleanup on unmount\n✅ Integrated into ProjectorLayout:\n- Uses WebSocket for non-local projector IDs\n- Shows WebSocket status in UI\n- Room name based on projector ID\n- Falls back to BroadcastChannel for local windows\n</info added on 2025-06-22T09:40:00.000Z>",
-              "status": "done",
-              "testStrategy": ""
-            },
-                      {
-              "id": 5,
-              "title": "Implement Projector View Rendering",
-              "description": "Create the projection view that renders surfaces and layers in presentation mode.",
-              "dependencies": [1, 4],
-              "details": "Build ProjectorLayout to render surfaces with warped quads, media layers, shaders, and HTML content. Hide UI controls, show only the output.\n<info added on 2025-06-22T09:20:00.000Z>\n✅ Updated ProjectorLayout for full projection rendering:\n- Uses Pixi.js Application component from @pixi/react\n- Renders all visible surfaces with WarpableQuadLayer\n- Fullscreen support with F11 key binding\n- Black background for projection mode\n- Hides cursor in projection view\n- Shows sync status when not in fullscreen\n- Responsive to window resizing\n- Integrates BroadcastChannel sync for local windows\n- Ready for WebSocket integration for remote sync\n- TODO: Add media layer, shader, and HTML content rendering\n</info added on 2025-06-22T09:20:00.000Z>",
-              "status": "done",
-              "testStrategy": ""
-            }
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Setup BroadcastChannel Provider",
+            "description": "Create a BroadcastChannel provider to sync state between editor and popout projection windows in the same browser.",
+            "dependencies": [],
+            "details": "Use BroadcastChannel API to enable instant communication between tabs/windows on the same origin. Create a provider that broadcasts Yjs updates and awareness states.\n<info added on 2025-06-22T09:00:00.000Z>\n✅ Created BroadcastChannelProvider class in src/lib/broadcastChannel.ts:\n- Implements bi-directional sync between browser windows/tabs\n- Handles Yjs document updates automatically\n- Provides sync and status callbacks\n- Prevents broadcast loops with origin tracking\n- Clean destroy method for proper cleanup\n- Created useBroadcastSync hook for React integration\n</info added on 2025-06-22T09:00:00.000Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Create Projector Window Opener",
+            "description": "Add a button to open projector view in a new window with BroadcastChannel sync.",
+            "dependencies": [
+              1
+            ],
+            "details": "Add a 'Open Projector' button that uses window.open() to create a popout window. Pass necessary parameters via URL to establish sync.\n<info added on 2025-06-22T09:10:00.000Z>\n✅ Added Projector button to TopBar:\n- Uses Monitor icon from lucide-react\n- Opens new window at /projector/local route\n- Window opens at 1280x720 with minimal chrome\n- Shows BroadcastChannel status in tooltip\n- Initializes broadcast sync automatically\n</info added on 2025-06-22T09:10:00.000Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Setup y-websocket Server",
+            "description": "Configure a y-websocket server for remote projection sync across different machines.",
+            "dependencies": [],
+            "details": "Install and configure @y/websocket-server or create a simple WebSocket server using y-websocket utils. Handle multiple rooms for different projects.\n<info added on 2025-06-22T09:30:00.000Z>\n✅ Created WebSocket server in server/websocket-server.js:\n- Uses y-websocket/bin/utils setupWSConnection\n- Handles all Yjs sync protocol automatically\n- Runs on port 1234 by default (configurable via PORT env)\n- Logs connections and handles graceful shutdown\n- Added npm scripts: 'server' and 'server:dev'\n- Ready for multi-room/project sync\n</info added on 2025-06-22T09:30:00.000Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Integrate WebSocket Provider",
+            "description": "Add WebSocket provider to both editor and projector views for remote sync.",
+            "dependencies": [
+              3
+            ],
+            "details": "Create WebSocket provider instances that connect to the server using project/room IDs. Handle connection status and reconnection logic.\n<info added on 2025-06-22T09:40:00.000Z>\n✅ Created useWebSocketSync hook:\n- Wraps y-websocket WebsocketProvider\n- Configurable server URL and room name\n- Tracks sync and connection status\n- Proper cleanup on unmount\n✅ Integrated into ProjectorLayout:\n- Uses WebSocket for non-local projector IDs\n- Shows WebSocket status in UI\n- Room name based on projector ID\n- Falls back to BroadcastChannel for local windows\n</info added on 2025-06-22T09:40:00.000Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement Projector View Rendering",
+            "description": "Create the projection view that renders surfaces and layers in presentation mode.",
+            "dependencies": [
+              1,
+              4
+            ],
+            "details": "Build ProjectorLayout to render surfaces with warped quads, media layers, shaders, and HTML content. Hide UI controls, show only the output.\n<info added on 2025-06-22T09:20:00.000Z>\n✅ Updated ProjectorLayout for full projection rendering:\n- Uses Pixi.js Application component from @pixi/react\n- Renders all visible surfaces with WarpableQuadLayer\n- Fullscreen support with F11 key binding\n- Black background for projection mode\n- Hides cursor in projection view\n- Shows sync status when not in fullscreen\n- Responsive to window resizing\n- Integrates BroadcastChannel sync for local windows\n- Ready for WebSocket integration for remote sync\n- TODO: Add media layer, shader, and HTML content rendering\n</info added on 2025-06-22T09:20:00.000Z>",
+            "status": "done",
+            "testStrategy": ""
+          }
         ]
       },
       {
@@ -341,11 +348,90 @@
         ],
         "status": "pending",
         "subtasks": []
+      },
+      {
+        "id": 16,
+        "title": "Integrate LumenCanvas Style & UI System v2.0 Across Application",
+        "description": "Update the application's styling and UI components to fully adopt the LumenCanvas Style & UI System v2.0 guide, including new color tokens, layout rules, handle styling, typography, and responsive behaviors.",
+        "details": "1. Review the 'LumenCanvas — Style & UI System v2.0' guide in detail.\n2. Update `src/styles/theme.css` to define new CSS variables for color tokens: `bg`, `sidebar-bg`, `canvas-bg`, `panel-bg`, `border`, `accent`, `hover`, `text`, and `text-muted`.\n3. Refactor `src/index.css` to map Tailwind utility classes to the new CSS variables, ensuring all relevant utilities (background, border, text, accent, hover) use the updated tokens.\n4. Refactor UI components (TopBar, Sidebar, Canvas area, ShaderEditorPanel, Asset list) to conform to the new sizing, spacing, hover/selected states, and layout rules. Update component structure and class names as needed for consistency.\n5. Implement handle styling for interactive elements (e.g., quad handles) as 8px squares with accent fill, and add canvas frame shadow per the guide.\n6. Update global typography styles to use Inter and Fira Code with the specified sizes and weights from the guide.\n7. Verify and adjust responsive breakpoints and flex grid layouts to ensure they still function as intended with the new system.\n8. Update or regenerate any affected unit tests and Storybook snapshots to reflect the new styles and layouts.\n9. Document migration notes for any removed or renamed classes, variables, or component props, providing clear upgrade guidance for future development.",
+        "testStrategy": "- Manually review all major UI areas (TopBar, Sidebar, Canvas, ShaderEditorPanel, Asset list) to confirm adherence to the new style guide.\n- Use visual regression testing (e.g., Storybook snapshots) to detect unintended changes.\n- Run all unit and integration tests to ensure no regressions in functionality.\n- Test handle interactions and canvas frame shadow visually and via automated UI tests.\n- Verify typography, color tokens, and responsive layouts across breakpoints and devices.\n- Review migration notes for completeness and accuracy by attempting to upgrade a sample feature branch.",
+        "status": "pending",
+        "dependencies": [
+          4,
+          6
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Add LumenCanvas v2.0 Color Tokens to tailwind.config.js",
+            "description": "Integrate all color tokens from the LumenCanvas Style & UI System v2.0 guide into tailwind.config.js under theme.extend.colors, ensuring all required tokens are present and derived utilities are generated.",
+            "dependencies": [],
+            "details": "Review the v2.0 guide for the full list of color tokens (e.g., bg, sidebar-bg, canvas-bg, panel-bg, border, accent, hover, text, text-muted). In tailwind.config.js, extend the theme.colors object with these tokens, mapping each to a CSS variable (e.g., 'bg': 'var(--color-bg)'). Ensure Tailwind utilities (background, border, text, accent, hover) are mapped to these tokens. Regenerate Tailwind build to confirm utilities are available.",
+            "status": "pending",
+            "testStrategy": "Check that all new color utilities are available in the compiled CSS. Use a test page to verify each token renders the expected color."
+          },
+          {
+            "id": 2,
+            "title": "Refactor src/styles/theme.css to Export CSS Variables for All Tokens",
+            "description": "Update theme.css to define and export CSS variables for all LumenCanvas v2.0 tokens, removing any hard-coded color values and ensuring consistency with tailwind.config.js.",
+            "dependencies": [
+              1
+            ],
+            "details": "For each color token defined in tailwind.config.js, declare a corresponding CSS variable in :root within theme.css. Remove any legacy or hard-coded color values. Ensure variables are named consistently (e.g., --color-bg, --color-accent). If necessary, add fallback values. Validate that all tokens required by the guide are present.\n<info added on 2025-06-22T09:14:23.140Z>\nAdded utility color tokens --surface-hover, --surface-selected, and --backdrop under Utility Colors in theme.css. Replaced hard-coded rgba backgrounds with these variables in .sidebar-item:hover, .asset-item:hover, .sidebar-item.selected, and .modal-backdrop. Next, will extract remaining hard-coded hex color declarations (such as border dash) into CSS variables and ensure all base colors match the defined tokens. Continuing to audit for any legacy or missing color tokens.\n</info added on 2025-06-22T09:14:23.140Z>",
+            "status": "pending",
+            "testStrategy": "Inspect the compiled CSS to ensure all variables are present and correct. Use browser dev tools to verify variable values are applied throughout the app."
+          },
+          {
+            "id": 3,
+            "title": "Clean Up src/index.css and Map Tailwind Utilities to CSS Variables",
+            "description": "Refactor index.css to remove legacy color classes, map Tailwind utility classes to the new CSS variables, and ensure border, background, text, and accent utilities use the updated tokens.",
+            "dependencies": [
+              2
+            ],
+            "details": "Audit index.css for any hard-coded color or border styles and replace them with references to the new CSS variables. Ensure Tailwind classes like border-border, bg-canvas-bg, text-text, etc., are mapped to the correct variables. Remove obsolete or conflicting styles. Test that all mapped utilities work as expected in the app.",
+            "status": "pending",
+            "testStrategy": "Create a test page using all mapped utilities and visually confirm correct application. Run CSS linting to catch any unmapped or obsolete classes."
+          },
+          {
+            "id": 4,
+            "title": "Migrate Shared UI Components to Token-Based Classes and Spacing",
+            "description": "Update shared UI components (Badge, Button, Card, Dialog, Tabs, TopBar, Sidebar) to use the new token-based classes, spacing scale, and layout rules from the v2.0 guide.",
+            "dependencies": [
+              3
+            ],
+            "details": "For each shared component, refactor class names and structure to use the new color tokens and spacing utilities. Update padding, margin, border, and background classes to reference the new tokens. Adjust component structure as needed for consistency with the v2.0 layout and spacing rules. Remove any deprecated or legacy classes.",
+            "status": "pending",
+            "testStrategy": "Run and visually inspect each component in Storybook. Compare against the v2.0 guide for accuracy. Update or add unit tests to check for correct class application."
+          },
+          {
+            "id": 5,
+            "title": "Update Canvas & Handle Visuals to v2.0 Specifications",
+            "description": "Refactor Canvas-related visuals (WarpableQuadLayer, selection handles) to use 8px accent-colored squares for handles and add the specified frame shadow per the v2.0 guide.",
+            "dependencies": [
+              4
+            ],
+            "details": "Update handle elements to be 8x8px squares with accent fill using the new token. Apply the canvas frame shadow as described in the guide, using CSS variables for color and shadow parameters. Ensure interactive states (hover, selected) use the correct tokens and effects.",
+            "status": "pending",
+            "testStrategy": "Manually test handle appearance and interaction in the app. Add visual regression tests for Canvas and handle states in Storybook."
+          },
+          {
+            "id": 6,
+            "title": "Add Storybook Previews and Visual Snapshot Tests for Regression Safety",
+            "description": "Create or update minimal Storybook previews for all affected components and implement visual snapshot tests using Jest or Vitest to ensure style regressions are caught.",
+            "dependencies": [
+              5
+            ],
+            "details": "For each refactored component, ensure a Storybook story exists that demonstrates all key states (default, hover, selected, disabled, etc.). Integrate visual snapshot testing (e.g., with @storybook/test-runner or jest-image-snapshot) to capture and compare component renders. Set up CI to run these tests on pull requests.",
+            "status": "pending",
+            "testStrategy": "Run snapshot tests locally and in CI. Confirm that any style changes trigger expected diffs. Review and approve new baselines as needed."
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2025-06-22T05:43:09.296Z",
-      "updated": "2025-06-22T06:15:29.312Z",
+      "updated": "2025-06-22T08:44:27.577Z",
       "description": "Tasks for master context"
     }
   }

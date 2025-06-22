@@ -12,6 +12,11 @@
   --text: #E0E0E0;
   --text-muted: #888;
   
+  /* Utility Colors */
+  --surface-hover: rgba(255, 255, 255, 0.05);
+  --surface-selected: rgba(18, 176, 255, 0.1);
+  --backdrop: rgba(0, 0, 0, 0.8);
+  
   /* Layout Dimensions */
   --sidebar-width: 280px;
   --topbar-height: 48px;
@@ -183,12 +188,12 @@ code, pre {
 }
 
 .sidebar-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-hover);
   color: var(--text);
 }
 
 .sidebar-item.selected {
-  background: rgba(18, 176, 255, 0.1);
+  background: var(--surface-selected);
   color: var(--accent);
 }
 
@@ -239,7 +244,7 @@ code, pre {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--backdrop);
   backdrop-filter: blur(4px);
   z-index: var(--z-modal);
   opacity: 0;
@@ -307,7 +312,7 @@ code, pre {
 }
 
 .asset-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-hover);
 }
 
 .asset-icon {
