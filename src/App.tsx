@@ -1,4 +1,4 @@
-import React from 'react';
+// import React from 'react'; // Not needed with new JSX transform
 import { Routes, Route, Navigate } from 'react-router-dom';
 import EditorLayout from './layouts/EditorLayout';
 import ProjectorLayout from './layouts/ProjectorLayout';
