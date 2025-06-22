@@ -4,13 +4,15 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import type { 
   Store, 
   StoreState, 
-  StoreActions, 
   Surface, 
   Scene, 
   Asset, 
   Layer,
   AssetType 
 } from '../types/store';
+
+// Export types for external use
+export type { Surface, Scene, Asset, Layer };
 
 // Utility function to generate unique IDs
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -39,6 +41,23 @@ export const useProjectionStore = create<Store>()(
   subscribeWithSelector(
     immer((set, get) => ({
       ...initialState,
+
+      // Bulk update functions for Yjs sync
+      setSurfaces: (surfaces: Record<string, Surface>) => set((state) => {
+        state.surfaces = surfaces;
+      }),
+
+      setScenes: (scenes: Record<string, Scene>) => set((state) => {
+        state.scenes = scenes;
+      }),
+
+      setLayers: (layers: Record<string, Layer>) => set((state) => {
+        state.layers = layers;
+      }),
+
+      setAssets: (assets: Record<string, Asset>) => set((state) => {
+        state.assets = assets;
+      }),
 
       // Surface actions
       addSurface: (surface) => set((state) => {

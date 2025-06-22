@@ -100,6 +100,12 @@ export interface StoreState {
 
 // Store actions interface
 export interface StoreActions {
+  // Bulk update functions for Yjs sync
+  setSurfaces: (surfaces: Record<string, Surface>) => void;
+  setScenes: (scenes: Record<string, Scene>) => void;
+  setLayers: (layers: Record<string, Layer>) => void;
+  setAssets: (assets: Record<string, Asset>) => void;
+
   // Surface actions
   addSurface: (surface: Omit<Surface, 'createdAt' | 'updatedAt'>) => void;
   updateSurface: (id: string, patch: Partial<Surface>) => void;
