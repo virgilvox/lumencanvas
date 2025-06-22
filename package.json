@@ -12,6 +12,8 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@pixi/react": "^8.0.2",
+    "@tailwindcss/vite": "^4.1.10",
+    "@types/node": "^24.0.3",
     "broadcast-channel": "^7.1.0",
     "immer": "^10.1.1",
     "onnxruntime-web": "^1.22.0",
@@ -19,6 +21,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.2",
+    "tailwindcss": "^4.1.10",
     "vite-plugin-pwa": "^1.0.0",
     "y-websocket": "^3.0.0",
     "yjs": "^13.6.27",
