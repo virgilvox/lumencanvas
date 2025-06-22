@@ -14,18 +14,18 @@ interface AutoMaskingProps {
 }
 
 // Mock U-Net model URL - in production, this would be a real model
-const MODEL_URL = '/models/unet-lite.onnx';
+// const MODEL_URL = '/models/unet-lite.onnx';
 const MODEL_SIZE = 1.2; // MB
 
 export function AutoMasking({ imageData, sourceCanvas, onMaskGenerated }: AutoMaskingProps) {
-  const [session, setSession] = useState<ort.InferenceSession | null>(null);
+  // const [session, setSession] = useState<ort.InferenceSession | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [executionProvider, setExecutionProvider] = useState<string>('wasm');
   const [processingTime, setProcessingTime] = useState<number | null>(null);
   const [mask, setMask] = useState<ImageData | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const polygonPoints = useRef<WarpPoint[]>([]);
+  // const polygonPoints = useRef<WarpPoint[]>([]);
   
   const { addSurface } = useProjectionStore();
 
@@ -44,19 +44,19 @@ export function AutoMasking({ imageData, sourceCanvas, onMaskGenerated }: AutoMa
       
       // Try WebGPU first, fallback to WASM
       let provider: string;
-      let sessionOptions: ort.InferenceSession.SessionOptions;
+      // let sessionOptions: ort.InferenceSession.SessionOptions;
       
       try {
         // Check if WebGPU is available
         if ('gpu' in navigator && navigator.gpu) {
-          sessionOptions = { executionProviders: ['webgpu'] };
+          // sessionOptions = { executionProviders: ['webgpu'] };
           provider = 'webgpu';
         } else {
           throw new Error('WebGPU not available');
         }
       } catch (e) {
         // Fallback to WASM
-        sessionOptions = { executionProviders: ['wasm'] };
+        // sessionOptions = { executionProviders: ['wasm'] };
         provider = 'wasm';
       }
 
@@ -77,6 +77,7 @@ export function AutoMasking({ imageData, sourceCanvas, onMaskGenerated }: AutoMa
     }
   };
 
+  /*
   const preprocessImage = (imageData: ImageData): Float32Array => {
     const { width, height, data } = imageData;
     const inputSize = 256; // Standard U-Net input size
@@ -147,6 +148,7 @@ export function AutoMasking({ imageData, sourceCanvas, onMaskGenerated }: AutoMa
     
     return finalCtx.getImageData(0, 0, originalWidth, originalHeight);
   };
+  */
 
   const runInference = async () => {
     if (!imageData) return;

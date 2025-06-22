@@ -29,7 +29,7 @@ export function PolygonRefinement({
 }: PolygonRefinementProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [points, setPoints] = useState<Point[]>([]);
-  const [isDrawing, setIsDrawing] = useState(false);
+  // const [isDrawing, setIsDrawing] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [mode, setMode] = useState<'add' | 'edit' | 'remove'>('add');
   const [showPolygon, setShowPolygon] = useState(true);

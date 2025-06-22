@@ -13,7 +13,7 @@ const ProjectorLayout: React.FC = () => {
   
   // Get projection state
   const surfaces = useProjectionStore(state => state.surfaces);
-  const layers = useProjectionStore(state => state.layers);
+  // const layers = useProjectionStore(state => state.layers);
   const scenes = useProjectionStore(state => state.scenes);
   const currentSceneId = useProjectionStore(state => state.currentSceneId);
   
@@ -32,7 +32,7 @@ const ProjectorLayout: React.FC = () => {
   useYjsSync();
 
   // Get current scene
-  const currentScene = currentSceneId ? scenes[currentSceneId] : null;
+  // const currentScene = currentSceneId ? scenes[currentSceneId] : null;
   const visibleSurfaces = Object.values(surfaces).filter(s => s.visible);
 
   // Handle fullscreen
