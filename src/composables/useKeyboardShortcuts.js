@@ -1,8 +1,10 @@
 import { onMounted, onUnmounted } from 'vue';
 import { useLayersStore } from '../store/layers';
+import { useProjectStore } from '../store/project';
 
 export function useKeyboardShortcuts() {
   const layersStore = useLayersStore();
+  const projectStore = useProjectStore();
   
   const shortcuts = {
     // E - Toggle warp handles
@@ -31,9 +33,9 @@ export function useKeyboardShortcuts() {
     // Ctrl/Cmd + E - Open code editor
     'ctrl+e': () => {
       const selectedLayer = layersStore.selectedLayer;
-      if (selectedLayer && selectedLayer.type === layersStore.LayerTypes.SHADER) {
-        // TODO: Open Monaco editor
-        console.log('Open code editor for', selectedLayer);
+      if (selectedLayer && (selectedLayer.type === layersStore.LayerTypes.SHADER || selectedLayer.type === layersStore.LayerTypes.HTML)) {
+        // Emit event to open editor
+        window.dispatchEvent(new CustomEvent('open-code-editor', { detail: selectedLayer }));
       }
     },
     
@@ -42,6 +44,24 @@ export function useKeyboardShortcuts() {
       if (layersStore.selectedLayerId) {
         layersStore.duplicateLayer(layersStore.selectedLayerId);
       }
+    },
+    
+    // Ctrl/Cmd + S - Save project (manual trigger)
+    'ctrl+s': (e) => {
+      e.preventDefault();
+      projectStore.saveProject();
+    },
+    
+    // Ctrl/Cmd + O - Import project
+    'ctrl+o': (e) => {
+      e.preventDefault();
+      projectStore.importFromZip();
+    },
+    
+    // Ctrl/Cmd + Shift + S - Export project
+    'ctrl+shift+s': (e) => {
+      e.preventDefault();
+      projectStore.exportAsZip();
     },
     
     // Delete - Remove selected layer
@@ -81,7 +101,11 @@ export function useKeyboardShortcuts() {
     
     // Handle special keys
     if (e.ctrlKey || e.metaKey) {
-      key = `ctrl+${key.toLowerCase()}`;
+      if (e.shiftKey) {
+        key = `ctrl+shift+${key.toLowerCase()}`;
+      } else {
+        key = `ctrl+${key.toLowerCase()}`;
+      }
     }
     
     const handler = shortcuts[key];

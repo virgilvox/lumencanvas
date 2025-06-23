@@ -39,6 +39,7 @@ import { Application, Container, Graphics } from 'vue3-pixi';
 import * as PIXI from 'pixi.js';
 import { storeToRefs } from 'pinia';
 import { useLayersStore } from '../store/layers';
+import { useProjectStore } from '../store/project';
 import WarpHandle from './WarpHandle.vue';
 import LayerRenderer from './layers/LayerRenderer.vue';
 
@@ -49,13 +50,9 @@ const canvasSize = ref({ width: 800, height: 600 });
 const layersStore = useLayersStore();
 const { visibleLayers } = storeToRefs(layersStore);
 
-// Make the points reactive
-const points = ref([
-  { x: 100, y: 100 },
-  { x: 400, y: 100 },
-  { x: 450, y: 400 },
-  { x: 50, y: 350 },
-]);
+// Project store
+const projectStore = useProjectStore();
+const { warpPoints: points } = storeToRefs(projectStore);
 
 // Create mask for the warped quad
 const quadMask = computed(() => {
@@ -75,7 +72,9 @@ const quadMask = computed(() => {
 });
 
 const updatePoint = (index, newPosition) => {
-  points.value[index] = newPosition;
+  const newPoints = [...points.value];
+  newPoints[index] = newPosition;
+  projectStore.updateWarpPoints(newPoints);
 };
 
 const drawOutline = (g) => {
@@ -91,9 +90,11 @@ const drawOutline = (g) => {
 };
 
 const handleRequestEdit = (layer) => {
-  // TODO: Open Monaco editor for this layer
-  console.log('Request edit for layer:', layer);
+  // Emit event up to parent
+  emit('request-edit', layer);
 };
+
+const emit = defineEmits(['request-edit']);
 
 const onRender = () => {
   // Update canvas size if needed

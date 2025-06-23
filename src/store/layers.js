@@ -113,14 +113,33 @@ export const useLayersStore = defineStore('layers', () => {
         return { html: '<div style="color: white;">Hello World</div>' };
       case LayerTypes.SHADER:
         return { 
-          code: `// GLSL Shader
+          code: `// GLSL Fragment Shader
 precision mediump float;
+
 uniform float time;
 uniform vec2 resolution;
 
 void main() {
+  // Normalized coordinates (0 to 1)
   vec2 uv = gl_FragCoord.xy / resolution.xy;
-  vec3 color = vec3(uv.x, uv.y, abs(sin(time)));
+  
+  // Center the coordinates (-0.5 to 0.5)
+  uv = uv - 0.5;
+  
+  // Create animated gradient
+  float wave = sin(uv.x * 10.0 + time * 2.0) * 0.5 + 0.5;
+  float wave2 = sin(uv.y * 10.0 - time * 1.5) * 0.5 + 0.5;
+  
+  // Mix colors
+  vec3 color1 = vec3(0.071, 0.690, 1.0); // Cyan
+  vec3 color2 = vec3(1.0, 0.271, 0.416); // Pink
+  vec3 color = mix(color1, color2, wave * wave2);
+  
+  // Add glow effect
+  float dist = length(uv);
+  float glow = 1.0 - smoothstep(0.0, 0.5, dist);
+  color += glow * 0.2;
+  
   gl_FragColor = vec4(color, 1.0);
 }`,
           uniforms: {}

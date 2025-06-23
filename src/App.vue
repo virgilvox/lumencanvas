@@ -3,10 +3,28 @@
 </template>
 
 <script setup>
+import { onMounted, onUnmounted } from 'vue';
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts';
+import { useProjectStore } from './store/project';
 
 // Enable global keyboard shortcuts
 useKeyboardShortcuts();
+
+// Initialize project
+const projectStore = useProjectStore();
+let cleanupAutoSave = null;
+
+onMounted(async () => {
+  // Initialize project and enable auto-save
+  cleanupAutoSave = await projectStore.initProject();
+});
+
+onUnmounted(() => {
+  // Clean up auto-save
+  if (cleanupAutoSave) {
+    cleanupAutoSave();
+  }
+});
 </script>
 
 <style>
