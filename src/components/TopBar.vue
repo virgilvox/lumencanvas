@@ -7,10 +7,10 @@
     <div class="center-tools">
       <div class="tool-group segmented">
         <button class="tool-button">Scene ▾</button>
-        <button class="tool-button">+Layer</button>
-        <button class="tool-button">Mask</button>
-        <button class="tool-button">Shader (F2)</button>
-        <button class="tool-button">Preview (P)</button>
+        <button class="tool-button" @click="addImageLayer">+Layer</button>
+        <button class="tool-button" @click="toggleMask">Mask (M)</button>
+        <button class="tool-button" @click="addShaderLayer">Shader (F2)</button>
+        <button class="tool-button" @click="togglePreview">Preview (P)</button>
       </div>
     </div>
 
@@ -28,9 +28,31 @@
 
 <script setup>
 import { Save } from 'lucide-vue-next';
-// Previous imports are no longer needed for the new design
-// import { useAppStore } from '../store';
-// const store = useAppStore();
+import { useLayersStore } from '../store/layers';
+
+const layersStore = useLayersStore();
+const { LayerTypes, addLayer } = layersStore;
+
+function addImageLayer() {
+  // For now, default to image layer. Later we can show a menu
+  addLayer(LayerTypes.IMAGE);
+}
+
+function addShaderLayer() {
+  addLayer(LayerTypes.SHADER);
+}
+
+function toggleMask() {
+  // TODO: Implement masking functionality
+  console.log('Mask toggle - to be implemented');
+}
+
+function togglePreview() {
+  // TODO: Implement preview/projector view
+  console.log('Preview toggle - to be implemented');
+}
+
+
 </script>
 
 <style scoped>

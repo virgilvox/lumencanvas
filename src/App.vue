@@ -2,6 +2,13 @@
   <router-view />
 </template>
 
+<script setup>
+import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts';
+
+// Enable global keyboard shortcuts
+useKeyboardShortcuts();
+</script>
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
