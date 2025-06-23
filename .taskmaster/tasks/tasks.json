@@ -1,0 +1,120 @@
+{
+  "tags": {
+    "master": {
+      "description": "Default task list for LumenCanvas core and cloud features (PRD v1.4)",
+      "createdAt": "2024-07-16T22:38:00.000Z",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Initial Project Scaffolding and UI Shell Implementation",
+          "description": "Scaffold the initial Vue 3 application using Vite. Set up the core project structure including layouts, pages, and components. Implement the main UI shell with the TopBar, Sidebar, and CanvasStage components, styled according to the PRD. Configure necessary plugins like Vue Router and Pinia.",
+          "status": "done",
+          "dependencies": [],
+          "priority": "high",
+          "details": "Already implemented: EditorLayout, TopBar, Sidebar, CanvasStage, Vite config, Pinia, Vue Router.",
+          "testStrategy": "App loads, UI matches PRD screenshots."
+        },
+        {
+          "id": 2,
+          "title": "Warpable Quad Canvas (Pixi.js)",
+          "description": "Implement the interactive warpable quad using Pixi.js and vue3-pixi. Handles should be draggable, update quad geometry, and use event-mode for pointer events.",
+          "status": "done",
+          "dependencies": [1],
+          "priority": "high",
+          "details": "CanvasStage.vue, WarpHandle.vue implemented. Handles emit position updates, quad redraws reactively.",
+          "testStrategy": "Drag handles, quad updates in real time."
+        },
+        {
+          "id": 3,
+          "title": "Layer System: Media, Shader, HTML",
+          "description": "Implement the layer system in the sidebar. Support for image, video, URL, HTML, and GLSL shader layers. LayersPanel.vue and supporting state.",
+          "status": "pending",
+          "dependencies": [2],
+          "priority": "high",
+          "details": "Sidebar and LayersPanel scaffolded. Needs dynamic layer management, drag/drop, and shader integration.",
+          "testStrategy": "Add/remove/reorder layers, see correct rendering."
+        },
+        {
+          "id": 4,
+          "title": "Shader Editor Integration (Monaco)",
+          "description": "Integrate Monaco Editor for GLSL shader layers. Auto-open editor when shader layer is selected. Support live preview.",
+          "status": "pending",
+          "dependencies": [3],
+          "priority": "medium",
+          "details": "@monaco-editor/vue planned. Needs modal panel, code sync, and preview.",
+          "testStrategy": "Edit shader, see changes on canvas."
+        },
+        {
+          "id": 5,
+          "title": "IndexedDB Autosave & ZIP Export/Import",
+          "description": "Implement offline-first project save/load using IndexedDB. Support ZIP export/import for guest users.",
+          "status": "pending",
+          "dependencies": [3],
+          "priority": "medium",
+          "details": "browser-fs-access planned. Needs Pinia store integration.",
+          "testStrategy": "Save/load project offline, export/import ZIP."
+        },
+        {
+          "id": 6,
+          "title": "Clerk Authentication Integration",
+          "description": "Integrate Clerk for signup, login, and session management. Use Clerk components and session hooks.",
+          "status": "pending",
+          "dependencies": [1],
+          "priority": "high",
+          "details": "@clerk/vue installed. Needs auth wrappers, session state, and UI.",
+          "testStrategy": "Sign up, log in, session persists."
+        },
+        {
+          "id": 7,
+          "title": "Netlify Functions: Projects API (KV)",
+          "description": "Implement Netlify Function for CRUD on projects using Netlify KV. Protect with Clerk JWT.",
+          "status": "in-progress",
+          "dependencies": [6],
+          "priority": "high",
+          "details": "netlify/functions/projects.js created. Clerk auth and basic CRUD logic implemented. Needs full ProjectSchema and error handling.",
+          "testStrategy": "Create, list, update, delete projects via API."
+        },
+        {
+          "id": 8,
+          "title": "Netlify Functions: Asset Upload (Blobs)",
+          "description": "Implement signed upload URL endpoint for assets using Netlify Blobs. Protect with Clerk JWT.",
+          "status": "pending",
+          "dependencies": [6],
+          "priority": "medium",
+          "details": "netlify/functions/upload-url.js planned. Needs blob key logic, signed URL, and asset proxy endpoint.",
+          "testStrategy": "Upload asset, receive public URL."
+        },
+        {
+          "id": 9,
+          "title": "Cloud Sync & Rehydration",
+          "description": "Sync Pinia store with cloud projects/assets after Clerk login. Implement onAuthChange logic.",
+          "status": "pending",
+          "dependencies": [6,7,8],
+          "priority": "medium",
+          "details": "Pinia store and composables planned. Needs IndexedDB/cloud merge logic.",
+          "testStrategy": "Login, see projects/assets rehydrate."
+        },
+        {
+          "id": 10,
+          "title": "Shareable Projector URL (JWT Token)",
+          "description": "Implement JWT-signed share URL for /projector/:id with 24h expiry.",
+          "status": "pending",
+          "dependencies": [7],
+          "priority": "low",
+          "details": "Netlify Function planned. Needs JWT signing and validation.",
+          "testStrategy": "Generate share URL, access projector view."
+        },
+        {
+          "id": 11,
+          "title": "AI Masking (ONNX Automask)",
+          "description": "Integrate onnxruntime-web for webcam-based surface masking. Triggered by Mask button or shortcut. Lowest priority per user request.",
+          "status": "pending",
+          "dependencies": [3],
+          "priority": "low",
+          "details": "Needs onnxruntime-web, webcam access, and mask overlay logic.",
+          "testStrategy": "Click Mask, see AI-generated mask overlay."
+        }
+      ]
+    }
+  }
+} 

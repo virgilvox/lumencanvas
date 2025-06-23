@@ -3,6 +3,8 @@
 </template>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
 /* Reset default styles */
 * {
   box-sizing: border-box;
@@ -20,5 +22,4 @@ html, body, #app {
 }
 
 /* Add Inter font from Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 </style>
