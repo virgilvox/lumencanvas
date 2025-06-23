@@ -4,7 +4,7 @@
 			"command": "npx",
 			"args": ["-y", "--package=task-master-ai", "task-master-ai"],
 			"env": {
-				"PERPLEXITY_API_KEY": "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"
+				"PERPLEXITY_API_KEY": "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"
 			}
 		}
 	}

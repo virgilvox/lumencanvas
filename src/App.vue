@@ -1,0 +1,24 @@
+<template>
+  <router-view />
+</template>
+
+<style>
+/* Reset default styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: #0b0b0c; /* Base background from PRD */
+  color: #E0E0E0;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Add Inter font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+</style>
