@@ -7,30 +7,86 @@
     <div class="center-tools">
       <div class="tool-group segmented">
         <button class="tool-button">Scene ▾</button>
-        <button class="tool-button">+Layer</button>
-        <button class="tool-button">Mask</button>
-        <button class="tool-button">Shader (F2)</button>
-        <button class="tool-button">Preview (P)</button>
+        <button class="tool-button" @click="addImageLayer">+Layer</button>
+        <button class="tool-button" @click="toggleMask">Mask (M)</button>
+        <button class="tool-button" @click="addShaderLayer">Shader (F2)</button>
+        <button class="tool-button" @click="togglePreview">Preview (P)</button>
       </div>
     </div>
 
     <div class="right-tools">
       <div class="tool-group">
-        <button class="tool-button save-button">
-          <Save :size="16" />
-          Save
+        <button 
+          class="tool-button"
+          @click="projectStore.exportAsZip"
+          title="Export Project"
+        >
+          <Download :size="16" />
         </button>
-        <div class="user-avatar">JD</div>
+        <button 
+          class="tool-button"
+          @click="projectStore.importFromZip"
+          title="Import Project"
+        >
+          <Upload :size="16" />
+        </button>
+        <button 
+          class="tool-button save-button"
+          :disabled="projectStore.isSaving"
+        >
+          <Save :size="16" />
+          {{ saveStatus }}
+        </button>
+        <div class="user-avatar">G</div>
       </div>
     </div>
   </header>
 </template>
 
 <script setup>
-import { Save } from 'lucide-vue-next';
-// Previous imports are no longer needed for the new design
-// import { useAppStore } from '../store';
-// const store = useAppStore();
+import { computed } from 'vue';
+import { Save, Download, Upload } from 'lucide-vue-next';
+import { useLayersStore } from '../store/layers';
+import { useProjectStore } from '../store/project';
+
+const layersStore = useLayersStore();
+const projectStore = useProjectStore();
+const { LayerTypes, addLayer } = layersStore;
+
+// Computed properties
+const saveStatus = computed(() => {
+  if (projectStore.isSaving) return 'Saving...';
+  if (projectStore.lastSaved) {
+    const seconds = Math.floor((Date.now() - projectStore.lastSaved.getTime()) / 1000);
+    if (seconds < 5) return 'Saved';
+    if (seconds < 60) return `Saved ${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `Saved ${minutes}m ago`;
+    return 'Saved';
+  }
+  return 'Save';
+});
+
+function addImageLayer() {
+  // For now, default to image layer. Later we can show a menu
+  addLayer(LayerTypes.IMAGE);
+}
+
+function addShaderLayer() {
+  addLayer(LayerTypes.SHADER);
+}
+
+function toggleMask() {
+  // TODO: Implement masking functionality
+  console.log('Mask toggle - to be implemented');
+}
+
+function togglePreview() {
+  // TODO: Implement preview/projector view
+  console.log('Preview toggle - to be implemented');
+}
+
+
 </script>
 
 <style scoped>
