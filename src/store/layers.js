@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { useProjectStore } from './project';
 
 export const useLayersStore = defineStore('layers', () => {
+  const projectStore = useProjectStore();
   // State
   const layers = ref([]);
   const selectedLayerId = ref(null);
@@ -36,6 +38,11 @@ export const useLayersStore = defineStore('layers', () => {
   // Actions
   function addLayer(type, content = null) {
     const id = nextId++;
+    const x = projectStore.canvasWidth / 2;
+    const y = projectStore.canvasHeight / 2;
+    const width = 200;
+    const height = 200;
+    
     const newLayer = {
       id,
       type,
@@ -43,11 +50,23 @@ export const useLayersStore = defineStore('layers', () => {
       visible: true,
       opacity: 1,
       blendMode: BlendModes.NORMAL,
-      position: { x: 0, y: 0 },
+      x,
+      y,
+      width,
+      height,
       scale: { x: 1, y: 1 },
       rotation: 0,
       content: content || getDefaultContent(type),
       properties: getDefaultProperties(type),
+      warp: {
+        enabled: false,
+        points: [
+          { x: x - width / 2, y: y - height / 2 },
+          { x: x + width / 2, y: y - height / 2 },
+          { x: x + width / 2, y: y + height / 2 },
+          { x: x - width / 2, y: y + height / 2 },
+        ]
+      }
     };
 
     layers.value.unshift(newLayer); // Add to top
@@ -67,9 +86,26 @@ export const useLayersStore = defineStore('layers', () => {
 
   function updateLayer(id, updates) {
     const layer = layers.value.find(l => l.id === id);
-    if (layer) {
-      Object.assign(layer, updates);
+    if (!layer) return;
+
+    // If position changes and warp points exist, shift them accordingly
+    const delta = { x: 0, y: 0 };
+    if (typeof updates.x === 'number') {
+      delta.x = updates.x - layer.x;
     }
+    if (typeof updates.y === 'number') {
+      delta.y = updates.y - layer.y;
+    }
+
+    if ((delta.x !== 0 || delta.y !== 0) && layer.warp?.points?.length) {
+      const newPoints = layer.warp.points.map(p => ({ x: p.x + delta.x, y: p.y + delta.y }));
+      updates.warp = {
+        ...(layer.warp || {}),
+        points: newPoints,
+      };
+    }
+
+    Object.assign(layer, updates);
   }
 
   function reorderLayers(fromIndex, toIndex) {
@@ -84,6 +120,14 @@ export const useLayersStore = defineStore('layers', () => {
         ...layer,
         id: nextId++,
         name: `${layer.name} Copy`,
+        // Deep clone nested objects
+        scale: { ...layer.scale },
+        content: { ...layer.content },
+        properties: { ...layer.properties },
+        warp: layer.warp ? {
+          ...layer.warp,
+          points: layer.warp.points ? [...layer.warp.points] : []
+        } : null
       };
       const index = layers.value.findIndex(l => l.id === id);
       layers.value.splice(index, 0, duplicate);

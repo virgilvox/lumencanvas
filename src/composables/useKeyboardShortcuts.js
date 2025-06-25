@@ -9,8 +9,12 @@ export function useKeyboardShortcuts() {
   const shortcuts = {
     // E - Toggle warp handles
     'e': () => {
-      // TODO: Implement handle toggle
-      console.log('Toggle handles');
+      const layer = layersStore.selectedLayer;
+      if (layer && layer.warp) {
+        layersStore.updateLayer(layer.id, {
+          warp: { ...layer.warp, enabled: !layer.warp.enabled }
+        });
+      }
     },
     
     // P - Open projector view
@@ -83,10 +87,8 @@ export function useKeyboardShortcuts() {
     if (layer) {
       const amount = large ? 10 : 1;
       layersStore.updateLayer(layer.id, {
-        position: {
-          x: layer.position.x + (dx * amount),
-          y: layer.position.y + (dy * amount)
-        }
+        x: layer.x + (dx * amount),
+        y: layer.y + (dy * amount)
       });
     }
   }

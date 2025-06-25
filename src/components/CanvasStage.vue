@@ -1,173 +1,172 @@
 <template>
-  <div ref="container" class="canvas-area">
-    <Application 
-      :resize-to="container" 
-      :background-alpha="1" 
-      background-color="#111"
-      @render="onRender"
+  <div class="canvas-container" ref="containerRef">
+    <Application
+      ref="appRef"
+      :width="projectStore.canvasWidth"
+      :height="projectStore.canvasHeight"
+      :background="0x000000"
+      :antialias="true"
+      @init="onInit"
     >
-      <!-- Layer Container with mask -->
       <container>
+        <!-- Render each layer using LayerRenderer -->
         <LayerRenderer
-          v-for="layer in visibleLayers"
+          v-for="layer in layers"
           :key="layer.id"
           :layer="layer"
-          :canvas-size="canvasSize"
-          @request-edit="handleRequestEdit"
+          :canvas-size="{ width: projectStore.canvasWidth, height: projectStore.canvasHeight }"
+          @pointerdown="onLayerPointerDown($event, layer)"
+          @request-edit="$emit('requestEdit', layer)"
         />
+
+        <!-- Selection outline and warp handles -->
+        <container v-if="selectedLayer && selectedLayer.warp?.enabled">
+          <graphics @render="drawSelectionOutline" />
+          <container v-if="selectedLayer.warp?.enabled">
+            <WarpHandle
+              v-for="(point, index) in selectedLayer.warp.points"
+              :key="`handle-${index}`"
+              :id="`${selectedLayer.id}-${index}`"
+              :x="point.x"
+              :y="point.y"
+              @update:position="pos => updateWarpPoint(index, pos)"
+            />
+          </container>
+        </container>
       </container>
-      
-      <!-- Warp quad outline (always on top) -->
-      <graphics :draw="drawOutline" />
-      
-      <!-- Warp handles -->
-      <template v-if="selectedLayer">
-        <WarpHandle
-          v-for="(pt, idx) in warpPoints"
-          :key="pt.id"
-          :id="pt.id"
-          :x="pt.x"
-          :y="pt.y"
-          @update:position="pos => updateWarpPoint(idx, pos)"
-        />
-      </template>
     </Application>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import * as PIXI from 'pixi.js';
+import { ref, computed, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
+import { Application } from 'vue3-pixi';
 import { useLayersStore } from '../store/layers';
 import { useProjectStore } from '../store/project';
-import WarpHandle from './WarpHandle.vue';
 import LayerRenderer from './layers/LayerRenderer.vue';
-import { Application } from 'vue3-pixi';
+import WarpHandle from './WarpHandle.vue';
 
-const container = ref(null);
-const canvasSize = ref({ width: 800, height: 600 });
-
-// Layer store
 const layersStore = useLayersStore();
-const { visibleLayers, selectedLayer } = storeToRefs(layersStore);
-
-// Project store
 const projectStore = useProjectStore();
-const { warpPoints: points } = storeToRefs(projectStore);
+const { layers, selectedLayer } = storeToRefs(layersStore);
 
-// Create mask for the warped quad
-const quadMask = computed(() => {
-  const mask = new PIXI.Graphics();
-  const pts = points.value;
-  
-  mask.clear();
-  mask.beginFill(0xffffff);
-  mask.moveTo(pts[0].x, pts[0].y);
-  mask.lineTo(pts[1].x, pts[1].y);
-  mask.lineTo(pts[2].x, pts[2].y);
-  mask.lineTo(pts[3].x, pts[3].y);
-  mask.closePath();
-  mask.endFill();
-  
-  return mask;
-});
+const appRef = ref(null);
+const dragData = ref(null);
 
-const updatePoint = (index, newPosition) => {
-  const newPoints = [...points.value];
-  newPoints[index] = newPosition;
-  projectStore.updateWarpPoints(newPoints);
+const onInit = (pixiApp) => {
+  appRef.value = pixiApp;
+  pixiApp.stage.eventMode = 'static';
+  pixiApp.stage.hitArea = pixiApp.screen;
+
+  // Add global mouse listeners for dragging
+  pixiApp.stage.on('pointermove', onDragMove);
+  pixiApp.stage.on('pointerup', onDragEnd);
+  pixiApp.stage.on('pointerupoutside', onDragEnd);
 };
 
-const drawOutline = (g) => {
-  const pts = points.value;
-  g.clear();
-  g.lineStyle(1.5, 0x12B0FF, 1); // Use accent color for the outline
+const onLayerPointerDown = (event, layer) => {
+  if (!appRef.value) {
+    console.error("onLayerPointerDown called before Pixi app was initialized.");
+    return;
+  }
+  layersStore.selectLayer(layer.id);
   
-  g.moveTo(pts[0].x, pts[0].y);
-  g.lineTo(pts[1].x, pts[1].y);
-  g.lineTo(pts[2].x, pts[2].y);
-  g.lineTo(pts[3].x, pts[3].y);
-  g.closePath();
+  const stage = appRef.value.stage;
+  const localPos = stage.toLocal(event.data.global);
+  const offsetX = localPos.x - layer.x;
+  const offsetY = localPos.y - layer.y;
+
+  dragData.value = {
+    layerId: layer.id,
+    type: 'layer',
+    offsetX,
+    offsetY,
+  };
+
+  event.stopPropagation();
 };
 
-const handleRequestEdit = (layer) => {
-  // Emit event up to parent
-  emit('request-edit', layer);
+const onDragMove = (event) => {
+  if (!dragData.value || dragData.value.type !== 'layer' || !appRef.value) return;
+
+  const layer = layersStore.layers.find(l => l.id === dragData.value.layerId);
+  if (!layer) return;
+
+  const stage = appRef.value.stage;
+  const localPos = stage.toLocal(event.data.global);
+  const newX = localPos.x - dragData.value.offsetX;
+  const newY = localPos.y - dragData.value.offsetY;
+  const dx = newX - layer.x;
+  const dy = newY - layer.y;
+
+  const updatedLayer = {
+    x: newX,
+    y: newY,
+  };
+
+  if (layer.warp && layer.warp.points) {
+    updatedLayer.warp = {
+      ...layer.warp,
+      points: layer.warp.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
+    };
+  }
+  
+  layersStore.updateLayer(layer.id, updatedLayer);
 };
 
-const emit = defineEmits(['request-edit']);
+const onDragEnd = () => {
+  dragData.value = null;
+};
 
-const onRender = () => {
-  // Update canvas size if needed
-  if (container.value) {
-    const rect = container.value.getBoundingClientRect();
-    if (rect.width !== canvasSize.value.width || rect.height !== canvasSize.value.height) {
-      canvasSize.value = { width: rect.width, height: rect.height };
-    }
+const updateWarpPoint = (index, position) => {
+  if (selectedLayer.value?.warp?.enabled) {
+    const newPoints = [...selectedLayer.value.warp.points];
+    newPoints[index] = { x: position.x, y: position.y };
+    layersStore.updateLayer(selectedLayer.value.id, {
+      warp: { ...selectedLayer.value.warp, points: newPoints }
+    });
   }
 };
 
-// Compute warp points for the selected layer (corners)
-const warpPoints = computed(() => {
+const drawSelectionOutline = (graphics) => {
   const layer = selectedLayer.value;
-  if (!layer) return [];
-  const { x, y } = layer.position;
-  const { x: sx, y: sy } = layer.scale;
-  const w = 100 * sx, h = 100 * sy; // Assume 100x100 default size, scale accordingly
-  // Top-left, top-right, bottom-right, bottom-left
-  return [
-    { id: 'tl', x: x - w/2, y: y - h/2 },
-    { id: 'tr', x: x + w/2, y: y - h/2 },
-    { id: 'br', x: x + w/2, y: y + h/2 },
-    { id: 'bl', x: x - w/2, y: y + h/2 },
-  ];
-});
+  if (!layer?.warp?.enabled) {
+    graphics.clear();
+    return;
+  }
 
-function updateWarpPoint(idx, pos) {
-  // TODO: Actually update the layer's warp points/perspective
-  // For now, just update position for demo
-  // You may want to store warp points in the layer object
-}
+  const points = layer.warp.points;
+  if (!points?.length) return;
 
+  graphics.clear();
+  graphics.lineStyle(2, 0x12B0FF, 1);
+  graphics.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    graphics.lineTo(points[i].x, points[i].y);
+  }
+  graphics.closePath();
+};
+
+// Enable edit mode by default on mount
 onMounted(() => {
-  // Update canvas size
-  if (container.value) {
-    const rect = container.value.getBoundingClientRect();
-    canvasSize.value = { width: rect.width, height: rect.height };
-  }
-  
-  // Enable global file drop
-  const canvasArea = container.value;
-  if (canvasArea) {
-    canvasArea.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    });
-    
-    canvasArea.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const files = Array.from(e.dataTransfer.files);
-      
-      files.forEach(file => {
-        if (file.type.startsWith('image/')) {
-          const layer = layersStore.addLayer(layersStore.LayerTypes.IMAGE);
-          // The layer component will handle the file
-        } else if (file.type.startsWith('video/')) {
-          const layer = layersStore.addLayer(layersStore.LayerTypes.VIDEO);
-          // The layer component will handle the file
-        }
-      });
+  if (selectedLayer.value && !selectedLayer.value.warp?.enabled) {
+    layersStore.updateLayer(selectedLayer.value.id, {
+      warp: { ...selectedLayer.value.warp, enabled: true },
     });
   }
 });
+
 </script>
 
 <style scoped>
-.canvas-area {
+.canvas-container {
   width: 100%;
   height: 100%;
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #000000;
   overflow: hidden;
 }
 </style> 

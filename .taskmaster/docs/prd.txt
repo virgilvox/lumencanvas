@@ -1,0 +1,113 @@
+LumenCanvas v1.4 - Browser-Based Projection Mapping Studio
+
+OVERVIEW:
+LumenCanvas is a zero-install, browser-native projection mapping studio that allows users to create stunning visual projections with drag-warp simplicity, live GLSL/HTML coding capabilities, and portable ZIP exports. The application uses Vue 3 with Pixi.js for rendering, Clerk for authentication, and Netlify Blobs + KV for cloud storage.
+
+KEY FEATURES:
+1. Zero Installation Required
+   - Runs entirely in the browser
+   - Works offline-first with IndexedDB
+   - Cloud-optional sync with Clerk authentication
+   
+2. Intuitive Projection Mapping
+   - Drag-warp quad handles to fit target surfaces
+   - Support for multiple media layers (image, video, URL, HTML, GLSL)
+   - Real-time preview and full-screen projector mode
+   
+3. Live Code Editing
+   - Integrated Monaco editor for GLSL shaders
+   - HTML layer support for dynamic content
+   - Plugin system for extensibility
+   
+4. AI-Powered Features
+   - Webcam-based AI masking using ONNX runtime
+   - Automatic surface isolation
+   
+5. Cloud Sync & Collaboration
+   - Clerk-based authentication (email, passkey, social)
+   - Project and asset sync across devices
+   - Shareable project URLs with JWT tokens
+
+TECHNICAL REQUIREMENTS:
+- Framework: Vue 3 with <script setup> and Vite 5
+- Rendering: Pixi.js 8 via vue3-pixi
+- State Management: Pinia + Yjs for CRDT
+- Code Editor: Monaco Editor via @monaco-editor/vue
+- Authentication: Clerk (@clerk/vue and @clerk/backend)
+- Storage: Netlify Blobs (assets) + Netlify KV (project JSON)
+- AI: onnxruntime-web for masking
+- PWA: vite-plugin-pwa
+- Icons: lucide-vue
+
+API ENDPOINTS:
+- GET /api/projects - List user's projects
+- POST /api/projects - Create new project
+- GET /api/projects/:id - Fetch single project
+- PUT /api/projects/:id - Update project
+- DELETE /api/projects/:id - Delete project and assets
+- POST /api/upload-url - Get signed upload URL
+- GET /api/assets/:key - Proxy asset retrieval
+
+UI/UX REQUIREMENTS:
+- Top Bar: 48px height with segmented buttons for scene selection, layer addition, masking, shader creation, and preview
+- Sidebar: 280px fixed width with sections for Layers, Scenes, and Assets
+- Canvas: Main workspace with Pixi.js rendering, quad outlines with dashed accent color
+- Shader Panel: Modal overlay with Monaco editor
+- Color Palette: Dark theme with #0b0b0c background, #12B0FF accent
+- Typography: Inter 14px for UI, Fira Code 13px for code
+
+KEYBOARD SHORTCUTS:
+- E: Toggle warp handles
+- P: Open projector tab
+- M: Mask via webcam
+- F2: New shader layer
+- Cmd/Ctrl+E: Open code editor
+
+OFFLINE/GUEST FEATURES:
+- Warp quads with snap (Shift)
+- Multiple media layer types
+- Handle toggle
+- Auto-open Monaco for shader layers
+- CRDT-synced projector pop-out
+- IndexedDB save
+- ZIP export/import
+
+CLOUD FEATURES (Clerk + Netlify):
+- User authentication with Clerk components
+- Projects API with JWT verification
+- Asset upload with signed URLs
+- Sync on login with store rehydration
+- Share URLs with 24-hour JWT tokens
+
+PROJECT STRUCTURE:
+- src/main.js - Application entry point
+- src/router/ - Vue Router configuration
+- src/stores/ - Pinia stores for user, project, assets
+- src/composables/ - Vue composables for auth, sync, masking
+- src/components/ - Vue components organized by feature
+- netlify/functions/ - Serverless functions for API
+- Plugin system in src/plugins/
+
+DELIVERABLES:
+1. Fully functional Vue 3 application with all core features
+2. Netlify Functions for backend API
+3. Clerk integration for authentication
+4. Responsive UI matching the design specifications
+5. PWA capabilities for offline use
+6. Complete keyboard shortcut support
+7. AI masking functionality
+8. Project export/import system
+9. Real-time collaboration features via CRDT
+
+CONSTRAINTS:
+- Must use JavaScript (no TypeScript)
+- Must support offline-first operation
+- Must integrate with Clerk for authentication
+- Must use Netlify Blobs and KV for storage
+- Must maintain 60fps performance for projections
+- Must work on all modern browsers
+
+TIMELINE GOALS:
+- Beta (Sep 2025): Core features with warp, drop, shader, mask, Clerk auth, Blobs
+- 1.0 (Dec 2025): Timeline editor, edge-blend, MIDI/OSC
+- 1.x (2026+): Remote sync, 3D calibration, shader store 

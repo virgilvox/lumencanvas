@@ -14,11 +14,14 @@ export const useProjectStore = defineStore('project', () => {
   const projectId = ref(null);
   const projectName = ref('Untitled Project');
   const projectDescription = ref('');
+  const canvasWidth = ref(800);
+  const canvasHeight = ref(600);
+  const blendMode = ref('normal');
   const warpPoints = ref([
-    { x: 100, y: 100 },
-    { x: 400, y: 100 },
-    { x: 450, y: 400 },
-    { x: 50, y: 350 },
+    { x: 200, y: 150 },  // top-left
+    { x: 600, y: 150 },  // top-right
+    { x: 600, y: 450 },  // bottom-right
+    { x: 200, y: 450 },  // bottom-left
   ]);
   const isSaving = ref(false);
   const lastSaved = ref(null);
@@ -37,6 +40,9 @@ export const useProjectStore = defineStore('project', () => {
     id: projectId.value,
     name: projectName.value,
     description: projectDescription.value,
+    canvasWidth: canvasWidth.value,
+    canvasHeight: canvasHeight.value,
+    blendMode: blendMode.value,
     warpPoints: warpPoints.value,
     layers: layersStore.layers,
     created: projectId.value ? undefined : new Date().toISOString(),
@@ -106,6 +112,9 @@ export const useProjectStore = defineStore('project', () => {
       projectId.value = project.id;
       projectName.value = project.name;
       projectDescription.value = project.description || '';
+      canvasWidth.value = project.canvasWidth || canvasWidth.value;
+      canvasHeight.value = project.canvasHeight || canvasHeight.value;
+      blendMode.value = project.blendMode || blendMode.value;
       warpPoints.value = project.warpPoints || warpPoints.value;
 
       // Load layers
@@ -296,6 +305,9 @@ export const useProjectStore = defineStore('project', () => {
     projectId,
     projectName,
     projectDescription,
+    canvasWidth,
+    canvasHeight,
+    blendMode,
     warpPoints,
     isSaving,
     lastSaved,

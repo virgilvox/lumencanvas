@@ -5,6 +5,7 @@
     :layer="layerWithSelection"
     :canvas-size="canvasSize"
     @request-edit="$emit('requestEdit', layer)"
+    @pointerdown="$emit('pointerdown', $event)"
   />
 </template>
 
@@ -17,6 +18,7 @@ import VideoLayer from './VideoLayer.vue';
 import ShaderLayer from './ShaderLayer.vue';
 import HtmlLayer from './HtmlLayer.vue';
 import UrlLayer from './UrlLayer.vue';
+import * as PIXI from 'pixi.js';
 
 const props = defineProps({
   layer: {
@@ -29,7 +31,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['requestEdit']);
+const emit = defineEmits(['requestEdit', 'pointerdown']);
 
 const layersStore = useLayersStore();
 const { selectedLayerId } = storeToRefs(layersStore);
@@ -53,4 +55,11 @@ const layerComponent = computed(() => {
   
   return components[props.layer.type] || null;
 });
+
+const BlendModeMap = {
+  normal: PIXI.BLEND_MODES.NORMAL,
+  add: PIXI.BLEND_MODES.ADD,
+  screen: PIXI.BLEND_MODES.SCREEN,
+  multiply: PIXI.BLEND_MODES.MULTIPLY,
+};
 </script>
