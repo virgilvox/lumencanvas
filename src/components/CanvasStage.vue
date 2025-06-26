@@ -2,9 +2,6 @@
   <div 
     class="canvas-container" 
     ref="containerRef"
-    @mousemove="onMouseMove"
-    @mouseup="onMouseUp"
-    @mouseleave="onMouseUp"
   >
     <Application
       ref="appRef"
@@ -45,7 +42,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Application } from 'vue3-pixi';
 import { useLayersStore } from '../store/layers';
@@ -58,13 +55,11 @@ const projectStore = useProjectStore();
 const { layers, selectedLayer } = storeToRefs(layersStore);
 
 const appRef = ref(null);
-const dragData = ref(null);
 const containerRef = ref(null);
 
 // This initialization function just initializes the app
 const onInit = (app) => {
   appRef.value = app;
-  console.log("Pixi application initialized:", app);
 };
 
 // Convert screen coordinates to canvas coordinates
@@ -78,91 +73,109 @@ function getCanvasPosition(clientX, clientY) {
   };
 }
 
+// Handle layer pointer down event
 const onLayerPointerDown = (event, layer) => {
   try {
     // Select the layer
     layersStore.selectLayer(layer.id);
-    console.log("Layer pointer down event type:", event.type);
     
-    // Get global mouse position
-    let globalPos;
+    // Get the event target
+    const target = event.currentTarget || event.target;
+    if (!target) return;
+    
+    // Get pointer position
+    let pointerX, pointerY;
     
     if (event.data && event.data.global) {
-      globalPos = event.data.global;
-      console.log("Using event.data.global:", globalPos);
+      pointerX = event.data.global.x;
+      pointerY = event.data.global.y;
     } else if (event.global) {
-      globalPos = event.global;
-      console.log("Using event.global:", globalPos);
-    } else if (event.nativeEvent) {
-      globalPos = getCanvasPosition(event.nativeEvent.clientX, event.nativeEvent.clientY);
-      if (globalPos) console.log("Using nativeEvent coordinates:", globalPos);
-    } else if (event.originalEvent) {
-      globalPos = getCanvasPosition(event.originalEvent.clientX, event.originalEvent.clientY);
-      if (globalPos) console.log("Using originalEvent coordinates:", globalPos);
-    } else {
-      // Last resort: try to get from DOM event
-      const mouseEvent = event.originalEvent || event.nativeEvent || event;
-      if (mouseEvent.clientX !== undefined) {
-        globalPos = getCanvasPosition(mouseEvent.clientX, mouseEvent.clientY);
-        if (globalPos) console.log("Using mouseEvent coordinates:", globalPos);
+      pointerX = event.global.x;
+      pointerY = event.global.y;
+    } else if (event.clientX !== undefined) {
+      const pos = getCanvasPosition(event.clientX, event.clientY);
+      if (pos) {
+        pointerX = pos.x;
+        pointerY = pos.y;
       }
     }
-
-    if (!globalPos) {
-      console.error('Pointer event missing global position. Event structure:', event);
+    
+    if (pointerX === undefined || pointerY === undefined) {
+      console.error('Could not determine pointer position');
       return;
     }
-
-    // Calculate offset between mouse position and layer position
-    const offsetX = globalPos.x - layer.x;
-    const offsetY = globalPos.y - layer.y;
-
-    // Start dragging
-    dragData.value = {
-      layerId: layer.id,
-      type: 'layer',
-      offsetX,
-      offsetY,
-      startX: globalPos.x,
-      startY: globalPos.y
-    };
-
-    console.log("Started dragging layer:", layer.id, "at offset:", offsetX, offsetY);
     
-    // Prevent further event propagation 
-    if (event.stopPropagation) event.stopPropagation();
+    // Calculate offset between pointer and layer position
+    const offsetX = pointerX - layer.x;
+    const offsetY = pointerY - layer.y;
+    
+    // Store layer and offset in event target's dataset
+    target._dragData = {
+      layerId: layer.id,
+      offsetX,
+      offsetY
+    };
+    
+    // Set up pointer move and pointer up handlers
+    target.addEventListener('pointermove', onPointerMove);
+    target.addEventListener('pointerup', onPointerUp);
+    target.addEventListener('pointercancel', onPointerUp);
+    
+    // Use pointer capture to ensure we get all events
+    if (event.pointerId && target.setPointerCapture) {
+      target.setPointerCapture(event.pointerId);
+    }
+    
+    // Prevent default to avoid text selection, etc.
     if (event.preventDefault) event.preventDefault();
   } catch (err) {
-    console.error("Error in onLayerPointerDown:", err);
+    console.error('Error in onLayerPointerDown:', err);
   }
 };
 
-// Handle DOM mouse move event (attached to container div)
-const onMouseMove = (event) => {
-  if (!dragData.value || dragData.value.type !== 'layer') return;
-  
+// Handle pointer move event
+function onPointerMove(event) {
   try {
-    const layer = layersStore.layers.find(l => l.id === dragData.value.layerId);
+    const target = event.currentTarget;
+    if (!target || !target._dragData) return;
+    
+    const { layerId, offsetX, offsetY } = target._dragData;
+    const layer = layersStore.layers.find(l => l.id === layerId);
     if (!layer) return;
-
-    // Get current mouse position relative to canvas
-    const mousePos = getCanvasPosition(event.clientX, event.clientY);
-    if (!mousePos) return;
     
-    console.log("Mouse move at:", mousePos.x, mousePos.y);
+    // Get pointer position
+    let pointerX, pointerY;
     
-    // Calculate new position
-    const newX = mousePos.x - dragData.value.offsetX;
-    const newY = mousePos.y - dragData.value.offsetY;
+    if (event.data && event.data.global) {
+      pointerX = event.data.global.x;
+      pointerY = event.data.global.y;
+    } else if (event.global) {
+      pointerX = event.global.x;
+      pointerY = event.global.y;
+    } else if (event.clientX !== undefined) {
+      const pos = getCanvasPosition(event.clientX, event.clientY);
+      if (pos) {
+        pointerX = pos.x;
+        pointerY = pos.y;
+      }
+    }
+    
+    if (pointerX === undefined || pointerY === undefined) return;
+    
+    // Calculate new layer position
+    const newX = pointerX - offsetX;
+    const newY = pointerY - offsetY;
+    
+    // Calculate delta for warp points
     const dx = newX - layer.x;
     const dy = newY - layer.y;
-
+    
     // Create updated layer data
     const updatedLayer = {
       x: newX,
       y: newY,
     };
-
+    
     // Also update warp points if they exist
     if (layer.warp && layer.warp.points) {
       updatedLayer.warp = {
@@ -171,22 +184,35 @@ const onMouseMove = (event) => {
       };
     }
     
-    // Update the layer position - same function that properties panel uses
+    // Update the layer position
     layersStore.updateLayer(layer.id, updatedLayer);
-    
-    console.log(`Layer moved to ${newX}, ${newY}`);
   } catch (err) {
-    console.error("Error in onMouseMove:", err);
+    console.error('Error in onPointerMove:', err);
   }
-};
+}
 
-// Handle DOM mouse up event (attached to container div)
-const onMouseUp = (event) => {
-  if (!dragData.value) return;
-  
-  console.log("Finished dragging layer:", dragData.value.layerId);
-  dragData.value = null;
-};
+// Handle pointer up event
+function onPointerUp(event) {
+  try {
+    const target = event.currentTarget;
+    if (!target) return;
+    
+    // Release pointer capture
+    if (event.pointerId && target.releasePointerCapture) {
+      target.releasePointerCapture(event.pointerId);
+    }
+    
+    // Clean up event listeners
+    target.removeEventListener('pointermove', onPointerMove);
+    target.removeEventListener('pointerup', onPointerUp);
+    target.removeEventListener('pointercancel', onPointerUp);
+    
+    // Clear drag data
+    delete target._dragData;
+  } catch (err) {
+    console.error('Error in onPointerUp:', err);
+  }
+}
 
 const updateWarpPoint = (index, position) => {
   if (selectedLayer.value?.warp?.enabled) {

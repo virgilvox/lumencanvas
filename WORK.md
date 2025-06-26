@@ -232,6 +232,16 @@ LumenCanvas is a zero-install, browser-native projection mapping studio built wi
 
 ## Changelog
 
+### 2024-12-23
+- **Fixed Layer Dragging and Warp Handles**:
+  - Completely rewrote the drag handling implementation using proper pointer events API
+  - Fixed issue where layers would continue to follow the mouse after release until clicked again
+  - Fixed offset problem where layers weren't following the mouse at the correct position
+  - Implemented proper pointer capture with `setPointerCapture` and `releasePointerCapture`
+  - Added proper event cleanup to prevent memory leaks
+  - Layer dragging and warp handles now work perfectly in sync
+  - Improved error handling throughout the drag implementation
+
 ### 2024-12-22
 - **Fixed vue3-pixi Import Errors**:
   - Removed incorrect imports of `Sprite` and `Mesh` components from vue3-pixi in all layer components
