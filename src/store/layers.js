@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useProjectStore } from './project';
+import { useHistoryStore } from './history';
+import { commandFactory } from '../utils/commandFactory';
 
 export const useLayersStore = defineStore('layers', () => {
   const projectStore = useProjectStore();
@@ -37,6 +39,7 @@ export const useLayersStore = defineStore('layers', () => {
 
   // Actions
   function addLayer(type, content = null) {
+    const historyStore = useHistoryStore();
     const id = nextId++;
     const x = projectStore.canvasWidth / 2;
     const y = projectStore.canvasHeight / 2;
@@ -69,15 +72,52 @@ export const useLayersStore = defineStore('layers', () => {
       }
     };
 
-    layers.value.unshift(newLayer); // Add to top
+    // Add the layer directly first
+    layers.value.unshift(newLayer);
+    
+    // Create command for undo/redo history
+    const command = {
+      type: 'ADD_LAYER',
+      execute() {
+        // If this is called from redo, the layer might have been removed
+        const existingIndex = layers.value.findIndex(l => l.id === id);
+        if (existingIndex === -1) {
+          layers.value.unshift({...newLayer});
+        }
+      },
+      undo() {
+        const index = layers.value.findIndex(l => l.id === id);
+        if (index !== -1) {
+          layers.value.splice(index, 1);
+        }
+        if (selectedLayerId.value === id) {
+          selectedLayerId.value = layers.value.length > 0 ? layers.value[0].id : null;
+        }
+      },
+      timestamp: Date.now(),
+      description: `Add ${type} layer`
+    };
+    
+    // Push the command to history without executing it again
+    historyStore.pushCommand(command);
+
     selectedLayerId.value = id;
     return newLayer;
   }
 
   function removeLayer(id) {
+    const historyStore = useHistoryStore();
     const index = layers.value.findIndex(layer => layer.id === id);
+    
     if (index !== -1) {
-      layers.value.splice(index, 1);
+      // Store original layer state for undo
+      const layerState = { ...layers.value[index] };
+      
+      // Create and execute command
+      const command = commandFactory.removeLayer(id, layerState);
+      command.execute();
+      historyStore.pushCommand(command);
+      
       if (selectedLayerId.value === id) {
         selectedLayerId.value = layers.value.length > 0 ? layers.value[0].id : null;
       }
@@ -85,8 +125,31 @@ export const useLayersStore = defineStore('layers', () => {
   }
 
   function updateLayer(id, updates) {
+    const historyStore = useHistoryStore();
     const layer = layers.value.find(l => l.id === id);
     if (!layer) return;
+
+    // Store original state for undo
+    const originalState = {};
+    for (const key in updates) {
+      if (key in layer) {
+        // Create a safe copy of the original value without using structuredClone
+        if (key === 'warp' && layer[key]) {
+          originalState[key] = {
+            enabled: layer[key].enabled,
+            points: layer[key].points ? layer[key].points.map(p => ({ x: p.x, y: p.y })) : []
+          };
+        } else if (key === 'scale' && layer[key]) {
+          originalState[key] = { x: layer[key].x, y: layer[key].y };
+        } else if (key === 'content' && layer[key]) {
+          originalState[key] = { ...layer[key] };
+        } else if (key === 'properties' && layer[key]) {
+          originalState[key] = { ...layer[key] };
+        } else {
+          originalState[key] = layer[key];
+        }
+      }
+    }
 
     // If position changes and warp points exist, shift them accordingly
     const delta = { x: 0, y: 0 };
@@ -98,6 +161,7 @@ export const useLayersStore = defineStore('layers', () => {
     }
 
     if ((delta.x !== 0 || delta.y !== 0) && layer.warp?.points?.length) {
+      // Create a safe copy of warp points and update them
       const newPoints = layer.warp.points.map(p => ({ x: p.x + delta.x, y: p.y + delta.y }));
       updates.warp = {
         ...(layer.warp || {}),
@@ -105,16 +169,25 @@ export const useLayersStore = defineStore('layers', () => {
       };
     }
 
-    Object.assign(layer, updates);
+    // Create and execute command
+    const command = commandFactory.updateLayer(id, updates, originalState);
+    command.execute();
+    historyStore.pushCommand(command);
   }
 
   function reorderLayers(fromIndex, toIndex) {
-    const [removed] = layers.value.splice(fromIndex, 1);
-    layers.value.splice(toIndex, 0, removed);
+    const historyStore = useHistoryStore();
+    
+    // Create and execute command
+    const command = commandFactory.reorderLayers(fromIndex, toIndex);
+    command.execute();
+    historyStore.pushCommand(command);
   }
 
   function duplicateLayer(id) {
+    const historyStore = useHistoryStore();
     const layer = layers.value.find(l => l.id === id);
+    
     if (layer) {
       const duplicate = {
         ...layer,
@@ -129,9 +202,31 @@ export const useLayersStore = defineStore('layers', () => {
           points: layer.warp.points ? [...layer.warp.points] : []
         } : null
       };
-      const index = layers.value.findIndex(l => l.id === id);
-      layers.value.splice(index, 0, duplicate);
-      selectedLayerId.value = duplicate.id;
+      
+      // Create and execute command
+      const command = {
+        type: 'DUPLICATE_LAYER',
+        execute() {
+          const index = layers.value.findIndex(l => l.id === id);
+          layers.value.splice(index, 0, duplicate);
+          selectedLayerId.value = duplicate.id;
+        },
+        undo() {
+          const index = layers.value.findIndex(l => l.id === duplicate.id);
+          if (index !== -1) {
+            layers.value.splice(index, 1);
+            if (selectedLayerId.value === duplicate.id) {
+              selectedLayerId.value = id; // Select original layer
+            }
+          }
+        },
+        timestamp: Date.now(),
+        description: `Duplicate layer ${id}`
+      };
+      
+      command.execute();
+      historyStore.pushCommand(command);
+      
       return duplicate;
     }
   }
@@ -142,6 +237,55 @@ export const useLayersStore = defineStore('layers', () => {
 
   function clearSelection() {
     selectedLayerId.value = null;
+  }
+  
+  // New method to restore a layer (for undo operations)
+  function restoreLayer(layerState) {
+    if (!layerState || !layerState.id) return;
+    
+    // Find the index where the layer was
+    const existingIndex = layers.value.findIndex(l => l.id === layerState.id);
+    
+    if (existingIndex !== -1) {
+      // Update existing layer
+      layers.value[existingIndex] = layerState;
+    } else {
+      // Add layer back
+      layers.value.unshift(layerState);
+      
+      // Update nextId if needed
+      if (layerState.id >= nextId) {
+        nextId = layerState.id + 1;
+      }
+    }
+    
+    // Select the restored layer
+    selectedLayerId.value = layerState.id;
+  }
+  
+  // Import layers from a project file
+  function importLayers(layersData) {
+    if (!Array.isArray(layersData)) return;
+    
+    // Clear existing layers
+    layers.value = [];
+    
+    // Import layers
+    layersData.forEach(layer => {
+      layers.value.push(layer);
+      
+      // Update nextId if needed
+      if (layer.id >= nextId) {
+        nextId = layer.id + 1;
+      }
+    });
+    
+    // Select first layer if available
+    if (layers.value.length > 0) {
+      selectedLayerId.value = layers.value[0].id;
+    } else {
+      selectedLayerId.value = null;
+    }
   }
 
   // Helper functions
@@ -209,6 +353,7 @@ void main() {
     // State
     layers,
     selectedLayerId,
+    nextId,
     
     // Getters
     selectedLayer,
@@ -226,5 +371,11 @@ void main() {
     duplicateLayer,
     selectLayer,
     clearSelection,
+    restoreLayer,
+    importLayers,
+    
+    // Helper functions
+    getDefaultContent,
+    getDefaultProperties
   };
 });

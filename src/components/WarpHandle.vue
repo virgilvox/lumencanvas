@@ -62,6 +62,11 @@ const onDragEnd = () => {
   }
   dragData.value.parent = null;
   stage = null;
+  
+  // Dispatch a custom event that CanvasStage can listen for
+  window.dispatchEvent(new CustomEvent('warpHandlePointerUp', { 
+    detail: { id: props.id }
+  }));
 };
 
 const onDragMove = (event) => {

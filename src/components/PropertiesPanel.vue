@@ -1,239 +1,456 @@
 <template>
-  <div v-if="selectedLayer" class="properties-panel">
+  <div class="properties-panel">
     <div class="panel-header">
-      <h3>{{ selectedLayer.name }}</h3>
-      <button @click="clearSelection" class="close-btn">
+      <h3>Properties</h3>
+      <button 
+        v-if="selectedLayer" 
+        class="close-button"
+        @click="clearSelection"
+      >
         <X :size="16" />
       </button>
     </div>
-    
-    <div class="panel-content">
-      <!-- Common properties -->
-      <div class="property-group">
-        <h4>Transform</h4>
-        
-        <div class="property-row">
+
+    <div v-if="selectedLayer" class="panel-content">
+      <div class="section">
+        <div class="section-header">
+          <h4>{{ layerTypeDisplay }} Layer</h4>
+          <div class="visibility-toggle">
+            <input 
+              type="checkbox" 
+              :checked="selectedLayer.visible" 
+              @change="toggleVisibility" 
+            />
+            <span>Visible</span>
+          </div>
+        </div>
+
+        <!-- Layer name -->
+        <div class="property">
+          <label>Name</label>
+          <input 
+            type="text" 
+            v-model="selectedLayer.name" 
+            @change="historyStore.pushCommand(commandFactory.updateLayer(selectedLayer.id, { name: selectedLayer.name }, { name: selectedLayer.name }))" 
+          />
+        </div>
+
+        <!-- Transform properties -->
+        <div class="property">
           <label>Position</label>
           <div class="input-group">
-            <input type="number" v-model="positionX" placeholder="X"/>
-            <input type="number" v-model="positionY" placeholder="Y"/>
+            <input type="number" v-model="posX" placeholder="X" @change="updatePosition"/>
+            <input type="number" v-model="posY" placeholder="Y" @change="updatePosition"/>
           </div>
         </div>
-        
-        <div class="property-row">
+
+        <div class="property">
           <label>Scale</label>
           <div class="input-group">
-            <input type="number" v-model="scaleX" step="0.1" placeholder="X"/>
-            <input type="number" v-model="scaleY" step="0.1" placeholder="Y"/>
+            <input type="number" v-model="scaleX" placeholder="X" step="0.1" @change="updateScale"/>
+            <input type="number" v-model="scaleY" placeholder="Y" step="0.1" @change="updateScale"/>
           </div>
         </div>
-        
-        <div class="property-row">
+
+        <div class="property">
           <label>Rotation</label>
-          <input type="number" v-model="rotation" step="1" placeholder="Degrees"/>
+          <input type="number" v-model="rotation" @change="updateRotation"/>
         </div>
-      </div>
-      
-      <!-- Appearance properties -->
-      <div class="property-group">
-        <h4>Appearance</h4>
-        
-        <div class="property-row">
+
+        <!-- Appearance properties -->
+        <div class="property">
           <label>Opacity</label>
           <input 
             type="range" 
-            v-model="opacity"
-            min="0"
-            max="1"
-            step="0.01"
+            min="0" 
+            max="1" 
+            step="0.01" 
+            v-model="opacity" 
+            @change="updateOpacity"
           />
-          <span class="value">{{ Math.round(opacity * 100) }}%</span>
+          <span>{{ Math.round(opacity * 100) }}%</span>
         </div>
-        
-        <div class="property-row">
+
+        <div class="property">
           <label>Blend Mode</label>
-          <select v-model="blendMode">
-            <option v-for="(mode, key) in BlendModes" :key="key" :value="mode">
-              {{ mode.charAt(0).toUpperCase() + mode.slice(1) }}
-            </option>
+          <select v-model="blendMode" @change="updateBlendMode(blendMode)">
+            <option value="normal">Normal</option>
+            <option value="add">Add</option>
+            <option value="multiply">Multiply</option>
+            <option value="screen">Screen</option>
           </select>
         </div>
-      </div>
-      
-      <!-- Type-specific properties -->
-      <div v-if="selectedLayer.type === LayerTypes.VIDEO" class="property-group">
-        <h4>Video Settings</h4>
-        
-        <div class="property-row">
-          <label for="video-upload" class="upload-btn">
+
+        <!-- Layer-specific properties -->
+        <div v-if="selectedLayer.type === 'image'" class="property">
+          <label>Image</label>
+          <div v-if="hasPreview" class="preview-container">
+            <img :src="previewSrc" class="preview-image" />
+          </div>
+          <label class="file-upload-button">
             <Upload :size="16" />
-            Choose Video
+            <span>Upload Image</span>
+            <input 
+              type="file" 
+              accept="image/*"
+              @change="handleFileUpload"
+              class="file-input"
+            />
           </label>
-          <input 
-            id="video-upload"
-            type="file" 
-            accept="video/*"
-            @change="handleVideoUpload"
-            class="file-input"
-          />
         </div>
-        
-        <div class="property-row">
-          <label>Volume</label>
-          <input 
-            type="range" 
-            v-model.number="selectedLayer.properties.volume"
-            @input="updateProperties({ volume: selectedLayer.properties.volume })"
-            min="0"
-            max="1"
-            step="0.01"
-          />
-          <span class="value">{{ Math.round(selectedLayer.properties.volume * 100) }}%</span>
+
+        <div v-if="selectedLayer.type === 'video'" class="property">
+          <label>Video</label>
+          <div v-if="hasPreview" class="preview-container">
+            <video :src="previewSrc" class="preview-video" controls muted loop />
+          </div>
+          <label class="file-upload-button">
+            <Upload :size="16" />
+            <span>Upload Video</span>
+            <input 
+              type="file" 
+              accept="video/*"
+              @change="handleFileUpload"
+              class="file-input"
+            />
+          </label>
         </div>
-        
-        <div class="property-row">
-          <label>Playback Rate</label>
-          <input 
-            type="number" 
-            v-model.number="selectedLayer.properties.playbackRate"
-            @input="updateProperties({ playbackRate: selectedLayer.properties.playbackRate })"
-            min="0.25"
-            max="4"
-            step="0.25"
-          />
+
+        <div v-if="selectedLayer.type === 'shader'" class="property">
+          <label>Shader</label>
+          <button class="code-button" @click="openCodeEditor">
+            <Code :size="16" />
+            <span>Edit Shader Code</span>
+          </button>
         </div>
-        
-        <div class="property-row">
-          <label>Loop</label>
-          <input 
-            type="checkbox" 
-            v-model="selectedLayer.content.loop"
-            @change="updateContent({ loop: selectedLayer.content.loop })"
-          />
+
+        <div v-if="selectedLayer.type === 'html'" class="property">
+          <label>HTML Content</label>
+          <button class="code-button" @click="openCodeEditor">
+            <Code :size="16" />
+            <span>Edit HTML</span>
+          </button>
         </div>
-      </div>
-      
-      <!-- Shader-specific properties -->
-      <div v-if="selectedLayer.type === LayerTypes.SHADER" class="property-group">
-        <h4>Shader</h4>
-        <button @click="$emit('requestEdit', selectedLayer)" class="edit-btn">
-          <Code :size="16" />
-          Edit Code
-        </button>
-      </div>
-      
-      <!-- URL-specific properties -->
-      <div v-if="selectedLayer.type === LayerTypes.URL" class="property-group">
-        <h4>URL Settings</h4>
-        
-        <div class="property-row">
+
+        <div v-if="selectedLayer.type === 'url'" class="property">
           <label>URL</label>
           <input 
             type="text" 
-            v-model="selectedLayer.content.url"
-            @input="updateContent({ url: selectedLayer.content.url })"
-            placeholder="https://example.com"
+            v-model="selectedLayer.content.url" 
+            @change="updateUrl(selectedLayer.content.url)" 
           />
         </div>
-        
-        <div class="property-row">
-          <label>Interactive</label>
-          <input 
-            type="checkbox" 
-            v-model="selectedLayer.properties.interactive"
-            @change="updateProperties({ interactive: selectedLayer.properties.interactive })"
-          />
-        </div>
-        
-        <div class="property-row">
-          <label>Scrollable</label>
-          <input 
-            type="checkbox" 
-            v-model="selectedLayer.properties.scrollable"
-            @change="updateProperties({ scrollable: selectedLayer.properties.scrollable })"
-          />
+
+        <!-- Warp controls -->
+        <div class="property">
+          <label>Warp</label>
+          <div class="checkbox-group">
+            <input 
+              type="checkbox" 
+              :checked="selectedLayer.warp?.enabled" 
+              @change="historyStore.pushCommand(commandFactory.updateLayer(selectedLayer.id, { warp: { ...selectedLayer.warp, enabled: !selectedLayer.warp?.enabled } }, { warp: { ...selectedLayer.warp } }))" 
+            />
+            <span>Enable Warping</span>
+          </div>
         </div>
       </div>
-      
-      <!-- HTML-specific properties -->
-      <div v-if="selectedLayer.type === LayerTypes.HTML" class="property-group">
-        <h4>HTML</h4>
-        <button @click="$emit('requestEdit', selectedLayer)" class="edit-btn">
-          <Code :size="16" />
-          Edit HTML
-        </button>
-      </div>
-      
-      <!-- Image-specific properties -->
-      <div v-if="selectedLayer.type === LayerTypes.IMAGE" class="property-group">
-        <h4>Image Source</h4>
-        
-        <div class="property-row">
-          <label for="image-upload" class="upload-btn">
-            <Upload :size="16" />
-            Choose Image
-          </label>
-          <input 
-            id="image-upload"
-            type="file" 
-            accept="image/*"
-            @change="handleImageUpload"
-            class="file-input"
-          />
-        </div>
-        
-        <div v-if="selectedLayer.content.src" class="property-row">
-          <img 
-            :src="selectedLayer.content.src" 
-            alt="Preview" 
-            class="image-preview"
-          />
-        </div>
-      </div>
+    </div>
+
+    <div v-else class="panel-content empty">
+      <p>Select a layer to edit its properties</p>
+    </div>
+
+    <!-- Toast notification -->
+    <div v-if="showToast" class="toast">
+      {{ toastMessage }}
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useLayersStore } from '../store/layers';
+import { useHistoryStore } from '../store/history';
+import { commandFactory } from '../utils/commandFactory';
 import { X, Code, Upload } from 'lucide-vue-next';
 
 const emit = defineEmits(['requestEdit']);
 
 const layersStore = useLayersStore();
+const historyStore = useHistoryStore();
 const { selectedLayer } = storeToRefs(layersStore);
 const { LayerTypes, BlendModes, updateLayer, clearSelection } = layersStore;
 
-// Computed properties for v-model binding
-const positionX = computed({
-  get: () => selectedLayer.value?.x || 0,
-  set: (val) => updateLayer(selectedLayer.value.id, { x: Number(val) })
+// Input values for properties (to avoid direct binding)
+const posX = ref(0);
+const posY = ref(0);
+const scaleX = ref(1);
+const scaleY = ref(1);
+const rotation = ref(0);
+const opacity = ref(1);
+const blendMode = ref('normal');
+const visible = ref(true);
+
+// Add toast notification state
+const showToast = ref(false);
+const toastMessage = ref('');
+
+// Update input values when selected layer changes
+watch(selectedLayer, (layer) => {
+  if (layer) {
+    posX.value = layer.x;
+    posY.value = layer.y;
+    scaleX.value = layer.scale?.x || 1;
+    scaleY.value = layer.scale?.y || 1;
+    rotation.value = layer.rotation || 0;
+    opacity.value = layer.opacity;
+    blendMode.value = layer.blendMode || 'normal';
+    visible.value = layer.visible;
+  }
+}, { immediate: true });
+
+// Handle position change
+function updatePosition() {
+  if (!selectedLayer.value) return;
+  
+  const layer = selectedLayer.value;
+  const originalState = { x: layer.x, y: layer.y };
+  const updates = { x: parseFloat(posX.value), y: parseFloat(posY.value) };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(layer.id, updates, originalState)
+  );
+}
+
+// Handle scale change
+function updateScale() {
+  if (!selectedLayer.value) return;
+  
+  const layer = selectedLayer.value;
+  const originalState = { scale: { x: layer.scale?.x || 1, y: layer.scale?.y || 1 } };
+  const updates = { scale: { x: parseFloat(scaleX.value), y: parseFloat(scaleY.value) } };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(layer.id, updates, originalState)
+  );
+}
+
+// Handle rotation change
+function updateRotation() {
+  if (!selectedLayer.value) return;
+  
+  const layer = selectedLayer.value;
+  const originalState = { rotation: layer.rotation || 0 };
+  const updates = { rotation: parseFloat(rotation.value) };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(layer.id, updates, originalState)
+  );
+}
+
+// Handle opacity change
+function updateOpacity() {
+  if (!selectedLayer.value) return;
+  
+  const layer = selectedLayer.value;
+  const originalState = { opacity: layer.opacity };
+  const updates = { opacity: parseFloat(opacity.value) };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(layer.id, updates, originalState)
+  );
+}
+
+// Handle blend mode change
+function updateBlendMode(mode) {
+  if (!selectedLayer.value) return;
+  
+  const layer = selectedLayer.value;
+  const originalState = { blendMode: layer.blendMode };
+  const updates = { blendMode: mode };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(layer.id, updates, originalState)
+  );
+}
+
+// Handle visibility toggle
+function toggleVisibility() {
+  if (!selectedLayer.value) return;
+  
+  const layer = selectedLayer.value;
+  const originalState = { visible: layer.visible };
+  const updates = { visible: !layer.visible };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(layer.id, updates, originalState)
+  );
+}
+
+// Show a toast message
+function showToastMessage(message, duration = 3000) {
+  toastMessage.value = message;
+  showToast.value = true;
+  
+  setTimeout(() => {
+    showToast.value = false;
+  }, duration);
+}
+
+// Handle file upload for image/video layers
+async function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file || !selectedLayer.value) return;
+  
+  try {
+    const reader = new FileReader();
+    const dataUrl = await new Promise((resolve, reject) => {
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    
+    const layer = selectedLayer.value;
+    const originalState = { content: { ...layer.content } };
+    const updates = { content: { ...layer.content, src: dataUrl } };
+    
+    historyStore.pushCommand(
+      commandFactory.updateLayer(layer.id, updates, originalState)
+    );
+  } catch (error) {
+    console.error('Failed to upload file:', error);
+    showToastMessage('Failed to upload file');
+    // Reset the file input
+    event.target.value = '';
+  }
+}
+
+// Handle shader code update
+function updateShaderCode(code) {
+  if (!selectedLayer.value || selectedLayer.value.type !== 'shader') return;
+  
+  const layer = selectedLayer.value;
+  const originalState = { content: { ...layer.content } };
+  const updates = { content: { ...layer.content, fragmentShader: code } };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(layer.id, updates, originalState)
+  );
+}
+
+// Handle HTML content update
+function updateHtmlContent(content) {
+  if (!selectedLayer.value || selectedLayer.value.type !== 'html') return;
+  
+  const layer = selectedLayer.value;
+  const originalState = { content: { ...layer.content } };
+  const updates = { content: { ...layer.content, html: content } };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(layer.id, updates, originalState)
+  );
+}
+
+// Handle URL update
+function updateUrl(url) {
+  if (!selectedLayer.value || selectedLayer.value.type !== 'url') return;
+  
+  const layer = selectedLayer.value;
+  const originalState = { content: { ...layer.content } };
+  const updates = { content: { ...layer.content, url } };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(layer.id, updates, originalState)
+  );
+}
+
+// Get the preview image source for the selected layer
+const previewSrc = computed(() => {
+  const layer = selectedLayer.value;
+  if (!layer) return null;
+  
+  if (layer.type === 'image' && layer.content?.src) {
+    return layer.content.src;
+  }
+  
+  if (layer.type === 'video' && layer.content?.src) {
+    return layer.content.src;
+  }
+  
+  return null;
 });
-const positionY = computed({
-  get: () => selectedLayer.value?.y || 0,
-  set: (val) => updateLayer(selectedLayer.value.id, { y: Number(val) })
+
+// Determine if the layer has a preview
+const hasPreview = computed(() => {
+  const layer = selectedLayer.value;
+  return layer && (layer.type === 'image' || layer.type === 'video') && layer.content?.src;
 });
-const scaleX = computed({
-  get: () => selectedLayer.value?.scale?.x || 1,
-  set: (val) => updateLayer(selectedLayer.value.id, { scale: { ...selectedLayer.value.scale, x: Number(val) } })
+
+// Determine if the layer supports file upload
+const supportsFileUpload = computed(() => {
+  const layer = selectedLayer.value;
+  return layer && (layer.type === 'image' || layer.type === 'video');
 });
-const scaleY = computed({
-  get: () => selectedLayer.value?.scale?.y || 1,
-  set: (val) => updateLayer(selectedLayer.value.id, { scale: { ...selectedLayer.value.scale, y: Number(val) } })
+
+// Determine if the layer is a shader
+const isShaderLayer = computed(() => {
+  const layer = selectedLayer.value;
+  return layer && layer.type === 'shader';
 });
-const rotation = computed({
-  get: () => selectedLayer.value?.rotation || 0,
-  set: (val) => updateLayer(selectedLayer.value.id, { rotation: Number(val) })
+
+// Determine if the layer is HTML
+const isHtmlLayer = computed(() => {
+  const layer = selectedLayer.value;
+  return layer && layer.type === 'html';
 });
-const opacity = computed({
-  get: () => selectedLayer.value?.opacity || 1,
-  set: (val) => updateLayer(selectedLayer.value.id, { opacity: Number(val) })
+
+// Determine if the layer is URL
+const isUrlLayer = computed(() => {
+  const layer = selectedLayer.value;
+  return layer && layer.type === 'url';
 });
-const blendMode = computed({
-  get: () => selectedLayer.value?.blendMode || BlendModes.NORMAL,
-  set: (val) => updateLayer(selectedLayer.value.id, { blendMode: val })
+
+// Open code editor for shader or HTML layers
+function openCodeEditor() {
+  if (!selectedLayer.value) return;
+  
+  const layer = selectedLayer.value;
+  if (layer.type === 'shader' || layer.type === 'html') {
+    window.dispatchEvent(new CustomEvent('open-code-editor', { detail: layer }));
+  }
+}
+
+// Get the accepted file types for the current layer
+const acceptedFileTypes = computed(() => {
+  const layer = selectedLayer.value;
+  if (!layer) return '';
+  
+  if (layer.type === 'image') {
+    return 'image/*';
+  }
+  
+  if (layer.type === 'video') {
+    return 'video/*';
+  }
+  
+  return '';
+});
+
+// Get the layer type display name
+const layerTypeDisplay = computed(() => {
+  const layer = selectedLayer.value;
+  if (!layer) return '';
+  
+  const typeMap = {
+    'image': 'Image',
+    'video': 'Video',
+    'shader': 'Shader',
+    'html': 'HTML',
+    'url': 'URL',
+  };
+  
+  return typeMap[layer.type] || layer.type;
 });
 
 function updateProperties(props) {
@@ -249,28 +466,6 @@ function updateContent(content) {
     updateLayer(selectedLayer.value.id, {
       content: { ...selectedLayer.value.content, ...content }
     });
-  }
-}
-
-function handleImageUpload(event) {
-  const file = event.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      updateContent({ src: e.target.result });
-    };
-    reader.readAsDataURL(file);
-  }
-}
-
-function handleVideoUpload(event) {
-  const file = event.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      updateContent({ src: e.target.result });
-    };
-    reader.readAsDataURL(file);
   }
 }
 </script>
@@ -324,43 +519,46 @@ function handleVideoUpload(event) {
   overflow-y: auto;
 }
 
-.property-group {
+.section {
   margin-bottom: 20px;
 }
 
-.property-group:last-child {
+.section:last-child {
   margin-bottom: 0;
 }
 
-.property-group h4 {
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-header h4 {
   font-size: 12px;
   font-weight: 500;
   color: #888;
   text-transform: uppercase;
+}
+
+.property {
   margin-bottom: 12px;
 }
 
-.property-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.property-row:last-child {
+.property:last-child {
   margin-bottom: 0;
 }
 
-.property-row label {
+.property label {
   font-size: 14px;
   color: #aaa;
   width: 80px;
   flex-shrink: 0;
 }
 
-.property-row input[type="number"],
-.property-row input[type="text"],
-.property-row select {
+.property input[type="text"],
+.property input[type="number"],
+.property select {
   flex: 1;
   background-color: #2a2a2a;
   border: 1px solid #444;
@@ -368,14 +566,6 @@ function handleVideoUpload(event) {
   padding: 6px 8px;
   color: #E0E0E0;
   font-size: 14px;
-}
-
-.property-row input[type="range"] {
-  flex: 1;
-}
-
-.property-row input[type="checkbox"] {
-  width: auto;
 }
 
 .input-group {
@@ -389,46 +579,28 @@ function handleVideoUpload(event) {
   flex: 1 1 50%;
 }
 
-.value {
-  font-size: 12px;
-  color: #888;
-  width: 40px;
-  text-align: right;
-}
-
-.edit-btn {
-  width: 100%;
+.visibility-toggle {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  padding: 8px;
-  background-color: #12B0FF;
-  color: #000;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
 }
 
-.edit-btn:hover {
-  background-color: #4acbff;
+.visibility-toggle input[type="checkbox"] {
+  width: auto;
 }
 
-.file-input {
-  display: none;
+.preview-container {
+  margin-bottom: 12px;
 }
 
-.image-preview {
+.preview-image,
+.preview-video {
   max-width: 100%;
   height: auto;
   border-radius: 4px;
-  margin-top: 8px;
 }
 
-.upload-btn {
+.file-upload-button {
   width: 100%;
   display: flex;
   align-items: center;
@@ -445,7 +617,57 @@ function handleVideoUpload(event) {
   transition: background-color 0.2s;
 }
 
-.upload-btn:hover {
+.file-upload-button:hover {
   background-color: #4acbff;
+}
+
+.code-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  background-color: #12B0FF;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.code-button:hover {
+  background-color: #4acbff;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+}
+
+.empty {
+  text-align: center;
+  padding: 12px;
+}
+
+/* Toast notification styles */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: #E0E0E0;
+  padding: 12px 20px;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
 }
 </style>

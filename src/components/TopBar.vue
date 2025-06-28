@@ -12,20 +12,41 @@
         <button class="tool-button" @click="addShaderLayer">Shader (F2)</button>
         <button class="tool-button" @click="togglePreview">Preview (P)</button>
       </div>
+      
+      <div class="tool-group">
+        <button 
+          class="tool-button"
+          @click="historyStore.undo()"
+          :disabled="!historyStore.canUndo"
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo :size="16" />
+        </button>
+        <button 
+          class="tool-button"
+          @click="historyStore.redo()"
+          :disabled="!historyStore.canRedo"
+          title="Redo (Ctrl+Y)"
+        >
+          <Redo :size="16" />
+        </button>
+      </div>
     </div>
 
     <div class="right-tools">
       <div class="tool-group">
         <button 
           class="tool-button"
-          @click="projectStore.exportAsZip"
+          @click="handleExport"
+          :disabled="projectStore.filePickerActive"
           title="Export Project"
         >
           <Download :size="16" />
         </button>
         <button 
           class="tool-button"
-          @click="projectStore.importFromZip"
+          @click="handleImport"
+          :disabled="projectStore.filePickerActive"
           title="Import Project"
         >
           <Upload :size="16" />
@@ -40,18 +61,79 @@
         <div class="user-avatar">G</div>
       </div>
     </div>
+    
+    <!-- Toast notification -->
+    <div class="toast-container" v-if="showToast">
+      <div class="toast">
+        {{ toastMessage }}
+      </div>
+    </div>
   </header>
 </template>
 
 <script setup>
-import { computed } from 'vue';
-import { Save, Download, Upload } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
+import { Save, Download, Upload, Undo, Redo } from 'lucide-vue-next';
 import { useLayersStore } from '../store/layers';
 import { useProjectStore } from '../store/project';
+import { useHistoryStore } from '../store/history';
 
 const layersStore = useLayersStore();
 const projectStore = useProjectStore();
+const historyStore = useHistoryStore();
 const { LayerTypes, addLayer } = layersStore;
+
+// Toast notification state
+const showToast = ref(false);
+const toastMessage = ref('');
+
+// Show a toast message
+function showToastMessage(message, duration = 3000) {
+  toastMessage.value = message;
+  showToast.value = true;
+  
+  setTimeout(() => {
+    showToast.value = false;
+  }, duration);
+}
+
+// Handle export with error handling
+async function handleExport() {
+  if (projectStore.filePickerActive) {
+    showToastMessage('A file operation is already in progress');
+    return;
+  }
+  
+  try {
+    await projectStore.exportAsZip();
+  } catch (error) {
+    if (error.name === 'NotAllowedError') {
+      showToastMessage('Cannot open multiple file dialogs at once');
+    } else {
+      showToastMessage('Failed to export project');
+      console.error(error);
+    }
+  }
+}
+
+// Handle import with error handling
+async function handleImport() {
+  if (projectStore.filePickerActive) {
+    showToastMessage('A file operation is already in progress');
+    return;
+  }
+  
+  try {
+    await projectStore.importFromZip();
+  } catch (error) {
+    if (error.name === 'NotAllowedError') {
+      showToastMessage('Cannot open multiple file dialogs at once');
+    } else {
+      showToastMessage('Failed to import project');
+      console.error(error);
+    }
+  }
+}
 
 // Computed properties
 const saveStatus = computed(() => {
@@ -86,7 +168,6 @@ function togglePreview() {
   console.log('Preview toggle - to be implemented');
 }
 
-
 </script>
 
 <style scoped>
@@ -98,6 +179,7 @@ function togglePreview() {
   align-items: center;
   padding: 0 16px;
   border-bottom: 1px solid #222;
+  position: relative;
 }
 
 .left-tools, .center-tools, .right-tools {
@@ -152,8 +234,13 @@ function togglePreview() {
   font-size: 14px;
 }
 
-.tool-button:hover {
+.tool-button:hover:not(:disabled) {
   background-color: #2a2a2a;
+}
+
+.tool-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .save-button {
@@ -163,7 +250,7 @@ function togglePreview() {
   font-weight: 500;
 }
 
-.save-button:hover {
+.save-button:hover:not(:disabled) {
   background-color: #4acbff;
 }
 
@@ -178,5 +265,35 @@ function togglePreview() {
   justify-content: center;
   font-weight: 500;
   font-size: 14px;
+}
+
+/* Toast notification styles */
+.toast-container {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  max-width: 400px;
+  pointer-events: none;
+}
+
+.toast {
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 4px;
+  margin-top: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  font-size: 14px;
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style> 

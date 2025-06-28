@@ -7,45 +7,85 @@ const ASSETS_STORE = 'assets';
 
 let db = null;
 
-function sanitizeForIndexedDB(obj, path = '') {
+function sanitizeForIndexedDB(obj, path = '', visited = new Set()) {
   if (obj === null || typeof obj === 'undefined') return null;
+  
+  // Handle primitive types
+  if (typeof obj !== 'object' && typeof obj !== 'function') return obj;
+  
+  // Handle functions
   if (typeof obj === 'function') {
     console.warn('Stripped function at', path);
     return undefined;
   }
-  if (typeof obj !== 'object') return obj;
+  
+  // Handle special objects
   if (obj instanceof Blob || obj instanceof File) {
-    // Let blobs/files be handled by asset store, not project
     console.warn('Stripped Blob/File at', path);
     return undefined;
   }
+  
   if (obj instanceof Date) return obj.toISOString();
-  if (Array.isArray(obj)) {
-    return obj.map((item, i) => sanitizeForIndexedDB(item, path + '[' + i + ']'));
+  
+  // Check for circular references
+  if (visited.has(obj)) {
+    console.warn('Stripped circular reference at', path);
+    return undefined;
   }
-  // Vue reactivity, PixiJS, DOM nodes, etc.
+  
+  // Add this object to visited set
+  visited.add(obj);
+  
+  // Check for non-serializable objects
   const proto = Object.prototype.toString.call(obj);
   if (
     proto === '[object Window]' ||
     proto === '[object HTMLElement]' ||
     proto === '[object Document]' ||
+    proto === '[object Event]' ||
+    proto === '[object WebGLRenderingContext]' ||
+    proto === '[object WebGL2RenderingContext]' ||
+    proto === '[object CanvasRenderingContext2D]' ||
     (typeof obj._isVue === 'boolean') ||
     (obj.constructor && obj.constructor.name && (
       obj.constructor.name.startsWith('Ref') ||
       obj.constructor.name.startsWith('Reactive') ||
-      obj.constructor.name.startsWith('PIXI')
+      obj.constructor.name.startsWith('PIXI') ||
+      obj.constructor.name.includes('Observer') ||
+      obj.constructor.name.includes('Proxy')
     ))
   ) {
-    console.warn('Stripped non-serializable object at', path, obj);
+    console.warn('Stripped non-serializable object at', path, obj.constructor ? obj.constructor.name : proto);
     return undefined;
   }
-  // Plain object: recurse
+  
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    const result = obj.map((item, i) => sanitizeForIndexedDB(item, path + '[' + i + ']', new Set(visited)))
+      .filter(item => item !== undefined);
+    visited.delete(obj);
+    return result;
+  }
+  
+  // Handle plain objects
   const clean = {};
   for (const key in obj) {
     if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
-    const val = sanitizeForIndexedDB(obj[key], path ? path + '.' + key : key);
-    if (typeof val !== 'undefined') clean[key] = val;
+    
+    // Skip properties that are likely to cause issues
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue;
+    }
+    
+    try {
+      const val = sanitizeForIndexedDB(obj[key], path ? path + '.' + key : key, new Set(visited));
+      if (typeof val !== 'undefined') clean[key] = val;
+    } catch (err) {
+      console.warn('Error sanitizing property', key, 'at', path, err);
+    }
   }
+  
+  visited.delete(obj);
   return clean;
 }
 
@@ -85,6 +125,21 @@ export async function saveProject(project) {
   
   // Add timestamp
   project.updated = new Date().toISOString();
+  
+  // Make sure project has a top-level id (required for IndexedDB key path)
+  if (!project.id && project.metadata && project.metadata.id) {
+    project.id = project.metadata.id;
+  }
+  
+  // Ensure we have an id
+  if (!project.id) {
+    project.id = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    if (project.metadata) {
+      project.metadata.id = project.id;
+    } else {
+      project.metadata = { id: project.id };
+    }
+  }
   
   // Sanitize before saving
   const sanitized = sanitizeForIndexedDB(project);
@@ -194,8 +249,14 @@ export async function importProject(data) {
   const oldProjectId = data.project.id;
   
   // Update project ID
-  data.project.id = newProjectId;
-  data.project.name = `${data.project.name} (Imported)`;
+  data.project.id = newProjectId; // Set top-level ID
+  if (data.project.metadata) {
+    data.project.metadata.id = newProjectId;
+  } else {
+    data.project.metadata = { id: newProjectId };
+  }
+  
+  data.project.name = `${data.project.name || 'Imported Project'} (Imported)`;
   data.project.imported = new Date().toISOString();
   
   // Save project

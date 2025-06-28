@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { useLayersStore } from './layers';
+import { useHistoryStore } from './history';
 import { 
   saveProject as saveProjectToDB,
   getProject,
@@ -8,6 +9,7 @@ import {
   exportProject as exportProjectFromDB,
   saveBlobAsset
 } from '../services/storage';
+import { projectSchema, validateProject, createEmptyProject } from '../schemas/projectSchema';
 
 export const useProjectStore = defineStore('project', () => {
   // State
@@ -26,9 +28,12 @@ export const useProjectStore = defineStore('project', () => {
   const isSaving = ref(false);
   const lastSaved = ref(null);
   const isLoading = ref(false);
+  // Flag to track if a file picker is currently active
+  const filePickerActive = ref(false);
 
   // Get layers store
   const layersStore = useLayersStore();
+  const historyStore = useHistoryStore();
 
   // Computed
   const hasUnsavedChanges = computed(() => {
@@ -37,16 +42,28 @@ export const useProjectStore = defineStore('project', () => {
   });
 
   const projectData = computed(() => ({
+    version: '1.0',
     id: projectId.value,
-    name: projectName.value,
-    description: projectDescription.value,
-    canvasWidth: canvasWidth.value,
-    canvasHeight: canvasHeight.value,
-    blendMode: blendMode.value,
-    warpPoints: warpPoints.value,
+    metadata: {
+      id: projectId.value,
+      name: projectName.value,
+      description: projectDescription.value,
+      created: projectId.value ? undefined : new Date().toISOString(),
+      modified: new Date().toISOString(),
+      author: '',
+    },
+    canvas: {
+      width: canvasWidth.value,
+      height: canvasHeight.value,
+      background: '#000000', // Default black background
+      blendMode: blendMode.value,
+    },
     layers: layersStore.layers,
-    created: projectId.value ? undefined : new Date().toISOString(),
-    version: '1.0'
+    assets: [], // Assets would be loaded from storage
+    history: {
+      commands: [], // We don't save command history to DB
+      currentIndex: -1,
+    }
   }));
 
   // Initialize project
@@ -108,26 +125,37 @@ export const useProjectStore = defineStore('project', () => {
         throw new Error('Project not found');
       }
 
-      // Load project data
-      projectId.value = project.id;
-      projectName.value = project.name;
-      projectDescription.value = project.description || '';
-      canvasWidth.value = project.canvasWidth || canvasWidth.value;
-      canvasHeight.value = project.canvasHeight || canvasHeight.value;
-      blendMode.value = project.blendMode || blendMode.value;
-      warpPoints.value = project.warpPoints || warpPoints.value;
+      // Validate project structure
+      const validation = validateProject(project);
+      if (!validation.valid) {
+        console.warn('Project validation warnings:', validation.errors);
+      }
+
+      // Load project metadata - use top-level id as primary source
+      projectId.value = project.id || project.metadata?.id;
+      projectName.value = project.metadata?.name || project.name || 'Untitled Project';
+      projectDescription.value = project.metadata?.description || project.description || '';
+      
+      // Load canvas settings
+      canvasWidth.value = project.canvas?.width || project.canvasWidth || 800;
+      canvasHeight.value = project.canvas?.height || project.canvasHeight || 600;
+      blendMode.value = project.canvas?.blendMode || project.blendMode || 'normal';
+      
+      // Load warp points (legacy support)
+      if (project.warpPoints) {
+        warpPoints.value = project.warpPoints;
+      }
 
       // Load layers
       if (project.layers && project.layers.length > 0) {
-        // Clear existing layers
-        layersStore.layers.splice(0);
-        // Add loaded layers
-        project.layers.forEach(layer => {
-          layersStore.layers.push(layer);
-        });
+        // Use new importLayers method
+        layersStore.importLayers(project.layers);
       }
 
-      lastSaved.value = new Date(project.updated);
+      // Clear history
+      historyStore.clear();
+
+      lastSaved.value = new Date(project.metadata?.modified || project.updated);
     } catch (error) {
       console.error('Failed to load project:', error);
       throw error;
@@ -136,10 +164,57 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  // Export project as JSON
+  function exportProjectAsJson() {
+    return JSON.stringify(sanitizeForIndexedDB(projectData.value), null, 2);
+  }
+
+  // Import project from JSON
+  async function importProjectFromJson(jsonString) {
+    try {
+      const projectData = JSON.parse(jsonString);
+      
+      // Validate project
+      const validation = validateProject(projectData);
+      if (!validation.valid) {
+        console.warn('Project validation warnings:', validation.errors);
+      }
+      
+      // Generate a new ID for the imported project
+      const newId = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Update project data with new ID
+      projectData.id = newId; // Add top-level ID
+      if (projectData.metadata) {
+        projectData.metadata.id = newId;
+      } else {
+        projectData.metadata = { id: newId };
+      }
+      
+      // Save to DB
+      await saveProjectToDB(projectData);
+      
+      // Load the imported project
+      await loadProject(newId);
+      
+      return newId;
+    } catch (error) {
+      console.error('Failed to import project from JSON:', error);
+      throw error;
+    }
+  }
+
   // Export project as ZIP
   async function exportAsZip() {
     if (!projectId.value) return;
+    
+    // Check if a file picker is already active
+    if (filePickerActive.value) {
+      console.warn('A file operation is already in progress');
+      return;
+    }
 
+    filePickerActive.value = true;
     try {
       const { fileSave } = await import('browser-fs-access');
       const JSZip = (await import('jszip')).default;
@@ -187,13 +262,29 @@ export const useProjectStore = defineStore('project', () => {
       
       return true;
     } catch (error) {
-      console.error('Failed to export project:', error);
-      throw error;
+      if (error.name === 'NotAllowedError' && error.message.includes('File picker already active')) {
+        console.warn('File picker is already active');
+      } else if (error.name === 'AbortError') {
+        console.log('Export cancelled by user');
+      } else {
+        console.error('Failed to export project:', error);
+        throw error;
+      }
+    } finally {
+      // Reset the flag when the operation is complete
+      filePickerActive.value = false;
     }
   }
 
   // Import project from ZIP
   async function importFromZip() {
+    // Check if a file picker is already active
+    if (filePickerActive.value) {
+      console.warn('A file operation is already in progress');
+      return;
+    }
+    
+    filePickerActive.value = true;
     try {
       const { fileOpen } = await import('browser-fs-access');
       const JSZip = (await import('jszip')).default;
@@ -255,8 +346,17 @@ export const useProjectStore = defineStore('project', () => {
       
       return imported;
     } catch (error) {
-      console.error('Failed to import project:', error);
-      throw error;
+      if (error.name === 'NotAllowedError' && error.message.includes('File picker already active')) {
+        console.warn('File picker is already active');
+      } else if (error.name === 'AbortError') {
+        console.log('Import cancelled by user');
+      } else {
+        console.error('Failed to import project:', error);
+        throw error;
+      }
+    } finally {
+      // Reset the flag when the operation is complete
+      filePickerActive.value = false;
     }
   }
 
@@ -280,6 +380,30 @@ export const useProjectStore = defineStore('project', () => {
   // Update warp points
   function updateWarpPoints(points) {
     warpPoints.value = points;
+  }
+
+  // Create a new project
+  function createNewProject(options = {}) {
+    const newProject = createEmptyProject(options);
+    
+    // Update store with new project data
+    projectId.value = newProject.metadata.id;
+    projectName.value = newProject.metadata.name;
+    projectDescription.value = newProject.metadata.description;
+    canvasWidth.value = newProject.canvas.width;
+    canvasHeight.value = newProject.canvas.height;
+    blendMode.value = newProject.canvas.blendMode;
+    
+    // Clear layers
+    layersStore.importLayers([]);
+    
+    // Clear history
+    historyStore.clear();
+    
+    // Save the new project
+    saveProject();
+    
+    return newProject.metadata.id;
   }
 
   // Watch for changes and trigger save
@@ -312,6 +436,7 @@ export const useProjectStore = defineStore('project', () => {
     isSaving,
     lastSaved,
     isLoading,
+    filePickerActive,
     
     // Computed
     hasUnsavedChanges,
@@ -325,5 +450,8 @@ export const useProjectStore = defineStore('project', () => {
     importFromZip,
     uploadAsset,
     updateWarpPoints,
+    createNewProject,
+    exportProjectAsJson,
+    importProjectFromJson,
   };
 });

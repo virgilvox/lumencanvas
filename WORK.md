@@ -232,6 +232,25 @@ LumenCanvas is a zero-install, browser-native projection mapping studio built wi
 
 ## Changelog
 
+### 2024-12-24
+- **Added Undo/Redo Functionality**:
+  - Implemented command pattern with history stack for undo/redo operations
+  - Created `history.js` store to manage command history
+  - Added `commandFactory.js` utility for generating command objects
+  - Integrated undo/redo buttons in TopBar component
+  - Added keyboard shortcuts (Ctrl+Z for undo, Ctrl+Y/Ctrl+Shift+Z for redo)
+  - Updated layer operations to use commands for position, warp points, and properties
+  - All edits now properly record previous state for undoing
+  - Fixed WarpHandle to emit events when dragging ends for command history
+- **Improved Project State Management**:
+  - Created standardized project schema in `projectSchema.js`
+  - Added project validation and structure normalization
+  - Implemented project serialization/deserialization utilities
+  - Enhanced export/import functionality with structured data
+  - Added support for saving/restoring project state
+  - Improved project creation with standardized defaults
+  - Better error handling for project loading/saving
+
 ### 2024-12-23
 - **Fixed Layer Dragging and Warp Handles**:
   - Completely rewrote the drag handling implementation using proper pointer events API

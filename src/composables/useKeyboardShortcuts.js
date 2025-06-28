@@ -1,18 +1,53 @@
 import { onMounted, onUnmounted } from 'vue';
 import { useLayersStore } from '../store/layers';
 import { useProjectStore } from '../store/project';
+import { useHistoryStore } from '../store/history';
 
 export function useKeyboardShortcuts() {
   const layersStore = useLayersStore();
   const projectStore = useProjectStore();
+  const historyStore = useHistoryStore();
   
   const shortcuts = {
+    // Undo/Redo shortcuts
+    'ctrl+z': (e) => {
+      e.preventDefault();
+      historyStore.undo();
+    },
+    
+    'ctrl+y': (e) => {
+      e.preventDefault();
+      historyStore.redo();
+    },
+    
+    'ctrl+shift+z': (e) => {
+      e.preventDefault();
+      historyStore.redo();
+    },
+    
     // E - Toggle warp handles
     'e': () => {
       const layer = layersStore.selectedLayer;
       if (layer && layer.warp) {
-        layersStore.updateLayer(layer.id, {
-          warp: { ...layer.warp, enabled: !layer.warp.enabled }
+        // Directly update the property to avoid structuredClone issues
+        const originalEnabled = layer.warp.enabled;
+        layer.warp.enabled = !layer.warp.enabled;
+        
+        // Record the command for undo/redo
+        historyStore.pushCommand({
+          type: 'UPDATE_LAYER_WARP',
+          execute() {
+            if (layer && layer.warp) {
+              layer.warp.enabled = !originalEnabled;
+            }
+          },
+          undo() {
+            if (layer && layer.warp) {
+              layer.warp.enabled = originalEnabled;
+            }
+          },
+          timestamp: Date.now(),
+          description: `Toggle warp for layer ${layer.id}`
         });
       }
     },
@@ -44,7 +79,8 @@ export function useKeyboardShortcuts() {
     },
     
     // Ctrl/Cmd + D - Duplicate layer
-    'ctrl+d': () => {
+    'ctrl+d': (e) => {
+      e.preventDefault();
       if (layersStore.selectedLayerId) {
         layersStore.duplicateLayer(layersStore.selectedLayerId);
       }
@@ -86,10 +122,81 @@ export function useKeyboardShortcuts() {
     const layer = layersStore.selectedLayer;
     if (layer) {
       const amount = large ? 10 : 1;
-      layersStore.updateLayer(layer.id, {
-        x: layer.x + (dx * amount),
-        y: layer.y + (dy * amount)
-      });
+      const newX = layer.x + (dx * amount);
+      const newY = layer.y + (dy * amount);
+      
+      // Store original position for undo/redo
+      const originalX = layer.x;
+      const originalY = layer.y;
+      
+      // Directly update the layer position
+      layer.x = newX;
+      layer.y = newY;
+      
+      // Also update warp points if they exist
+      if (layer.warp && layer.warp.points && layer.warp.points.length > 0) {
+        const deltaX = newX - originalX;
+        const deltaY = newY - originalY;
+        
+        // Store original warp points for undo/redo
+        const originalPoints = layer.warp.points.map(p => ({ x: p.x, y: p.y }));
+        
+        // Update warp points
+        for (let i = 0; i < layer.warp.points.length; i++) {
+          layer.warp.points[i].x += deltaX;
+          layer.warp.points[i].y += deltaY;
+        }
+        
+        // Create command for undo/redo
+        historyStore.pushCommand({
+          type: 'NUDGE_LAYER_WITH_WARP',
+          execute() {
+            if (layer) {
+              layer.x = newX;
+              layer.y = newY;
+              if (layer.warp && layer.warp.points) {
+                for (let i = 0; i < Math.min(layer.warp.points.length, originalPoints.length); i++) {
+                  layer.warp.points[i].x = originalPoints[i].x + deltaX;
+                  layer.warp.points[i].y = originalPoints[i].y + deltaY;
+                }
+              }
+            }
+          },
+          undo() {
+            if (layer) {
+              layer.x = originalX;
+              layer.y = originalY;
+              if (layer.warp && layer.warp.points) {
+                for (let i = 0; i < Math.min(layer.warp.points.length, originalPoints.length); i++) {
+                  layer.warp.points[i].x = originalPoints[i].x;
+                  layer.warp.points[i].y = originalPoints[i].y;
+                }
+              }
+            }
+          },
+          timestamp: Date.now(),
+          description: `Nudge layer ${layer.id}`
+        });
+      } else {
+        // Create command for undo/redo (simple position only)
+        historyStore.pushCommand({
+          type: 'NUDGE_LAYER',
+          execute() {
+            if (layer) {
+              layer.x = newX;
+              layer.y = newY;
+            }
+          },
+          undo() {
+            if (layer) {
+              layer.x = originalX;
+              layer.y = originalY;
+            }
+          },
+          timestamp: Date.now(),
+          description: `Nudge layer ${layer.id}`
+        });
+      }
     }
   }
   
