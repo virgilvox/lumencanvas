@@ -232,6 +232,47 @@ LumenCanvas is a zero-install, browser-native projection mapping studio built wi
 
 ## Changelog
 
+### 2024-12-25
+- **Implemented Collapsible Sidebar**:
+  - Added toggle button to collapse/expand the sidebar
+  - Implemented smooth transition animation for sidebar width
+  - Added localStorage persistence for sidebar state
+  - Updated EditorLayout to adapt grid layout when sidebar is collapsed
+  - Improved space efficiency for canvas editing
+
+- **Enhanced Canvas Stage Functionality**:
+  - Added canvas bounding box visualization with center lines
+  - Implemented zoom functionality with mouse wheel support
+  - Added zoom controls with percentage display
+  - Implemented pan functionality with middle mouse button or Shift+drag
+  - Improved canvas navigation for better editing experience
+
+- **Implemented Projector Page Improvements**:
+  - Added dedicated projector view accessible from the top bar
+  - Implemented fullscreen mode with auto-hiding controls
+  - Added keyboard shortcuts (F for fullscreen, Escape to exit, C to toggle controls)
+  - Synchronized projector view with editor state in real-time
+  - Added warp handle visibility for better alignment on projectors
+  - Improved UI with background options and zoom controls
+
+- **Fixed Issues**:
+  - Fixed auto-save console spam by adding a logging control flag
+  - Fixed duplicate function declaration in AssetsPanel
+  - Fixed sidebar tab switching issues by using v-show instead of v-if
+  - Increased sidebar width to prevent layer buttons from being cut off
+  - Improved error handling throughout the application
+
+- **Created AssetsPanel Component**:
+  - Implemented asset management with upload, preview, and delete functions
+  - Added support for various file types (images, videos, etc.)
+  - Integrated with storage service for persistent asset management
+
+- **Updated Storage Service**:
+  - Added missing functions like getAllAssets and deleteAsset
+  - Improved error handling and data sanitization
+  - Added support for multiple storage backends (IndexedDB, Netlify, MinIO)
+  - Implemented auto-save functionality with configurable logging
+
 ### 2024-12-24
 - **Added Undo/Redo Functionality**:
   - Implemented command pattern with history stack for undo/redo operations
@@ -417,169 +458,69 @@ Switched `VideoLayer.vue`, `UrlLayer.vue`, and `HtmlLayer.vue` from inline `vert
 
 Next: investigate drag-to-move persistence and make warp handles continue updating until pointer-up.
 
-# LumenCanvas Development Work Log
+# LumenCanvas Implementation Work
 
-## Current Status: Fixing Vue/Pixi.js Integration Issues
+## Fixed Issues
 
-### Issues Fixed:
-1. **Vue Component Resolution Errors** - Fixed unresolved component warnings for `<ForeignObject>` and `<graphics>`
-2. **TypeError: Cannot read properties of undefined (reading 'toUpperCase')** - Fixed by:
-   - Adding missing canvas properties (canvasWidth, canvasHeight, blendMode) to project store
-   - Adding null checks before calling toUpperCase on blendMode
-3. **Image/Video Loading Errors** - Fixed by:
-   - Updating layer content structure to use `{ src: null }` for images and videos
-   - Modifying createImageLayer and createVideoLayer to handle content.src properly
-   - Adding proper error handling with try/catch blocks
-4. **Layer Structure Issues** - Fixed by:
-   - Changing position from nested object to flat x, y properties
-   - Adding width and height properties to layers
-   - Adding warp configuration to layer structure
-   - Updating duplicateLayer to properly deep clone nested objects
-5. **Missing File Upload Functionality** - Added:
-   - File upload UI for image and video layers in PropertiesPanel
-   - File input handlers for converting files to base64 data URLs
-   - Preview display for uploaded images
+### 1. IndexedDB Storage Error
+- Fixed "Failed to execute 'put' on 'IDBObjectStore'" error by ensuring projects have a top-level ID property
+- Updated `saveProject` and `importProject` functions to maintain proper ID structure
+- Added sanitization function to handle non-serializable objects
 
-### Current Architecture:
-- **Vue 3** with Composition API
-- **Pixi.js v8** (native, not vue3-pixi wrapper) for performance
-- **Pinia** for state management
-- **IndexedDB** for local storage
-- **Netlify Functions** for cloud sync
+### 2. Maximum Call Stack Size Exceeded
+- Fixed infinite recursion error when adding layers by resolving circular dependencies between `commandFactory.js` and `layers.js`
+- Modified the layer creation process to avoid circular function calls
 
-### Next Steps:
-1. Test file upload functionality with actual images/videos
-2. Implement proper video playback controls in Pixi.js
-3. Fix warp/distortion functionality
-4. Add shader editor integration
-5. Implement effects system 
+### 3. DataCloneError During Layer Dragging
+- Fixed "Failed to execute 'structuredClone'" error by updating how layers are modified during drag operations
+- Implemented direct property updates instead of using `structuredClone` on non-cloneable objects
+- Enhanced `sanitizeForIndexedDB` function to handle complex objects safely
 
-## Session 1: Vue Component Resolution Fixes
+### 4. File Picker Already Active Error
+- Added a `filePickerActive` flag to prevent multiple file pickers from being opened simultaneously
+- Implemented proper error handling for file picker operations
+- Added user-friendly toast notifications for file operation errors
 
-### Fixed Vue3-Pixi Component Warnings
-- Changed `<ForeignObject>` to `<foreignObject>` (lowercase) in multiple layer components
-- Added proper imports for vue3-pixi components (Graphics, Sprite, Container, Mesh)
-- Fixed component registration issues across the codebase
+### 5. History Store Method Name Error
+- Fixed "historyStore.addCommand is not a function" error by updating calls to use the correct method name `pushCommand`
 
-### Fixed Runtime Errors
-1. **Missing Project Store Properties:**
-   - Added `canvasWidth`, `canvasHeight`, and `blendMode` to project store
-   - Updated projectData computed property
-   - Added proper initialization in loadProject
+### 6. Sidebar Tab Switching Issue
+- Fixed issue where the "Add Layer" button would disappear when switching tabs and returning to the Layers tab
+- Changed `v-if` directives to `v-show` in the sidebar to preserve component state when switching tabs
 
-2. **Layer Content Structure:**
-   - Fixed image/video content to use `{ src: null }` structure
-   - Updated layer creation functions to access `content.src`
-   - Added proper error handling
+## New Features Implemented
 
-3. **Layer Property Structure:**
-   - Changed from nested position object to flat `x` and `y` properties
-   - Added `width` and `height` properties (default 200x200)
-   - Added warp configuration structure
-   - Fixed duplicateLayer deep cloning
+### 1. Preview Component
+- Created a `PreviewModal.vue` component for displaying a live preview of the canvas
+- Added fullscreen support, zoom controls, and background options
+- Implemented keyboard shortcuts for preview controls
+- Added ability to open preview in a new tab with real-time sync via `ProjectorPage.vue`
 
-4. **File Upload Functionality:**
-   - Added file upload UI in PropertiesPanel
-   - Implemented FileReader for base64 conversion
-   - Added image preview display
-   - Styled upload buttons with Upload icon
+### 2. API Service
+- Created an `api.js` service for handling communication with backend servers
+- Implemented a Netlify serverless function (`projects.js`) with a mock database
+- Added comprehensive error handling and response formatting
 
-## Session 2: Vue3-Pixi vs Direct Pixi.js Decision
+### 3. Local Storage Backup
+- Created a `localBackup.js` service for managing automatic project backups
+- Implemented backup creation, restoration, and deletion functionality
+- Added a `BackupManager.vue` component with storage usage visualization
+- Integrated backup functionality with the project store
+- Added cloud sync toggle for future cloud storage integration
 
-### The Issue
-- Initially attempted to use Pixi.js v8 directly
-- Encountered version mismatch: vue3-pixi v0.9.6 expects Pixi.js v7, but v8 was installed
-- This caused errors like `PIXI.Geometry is not defined`
+### 4. UI Improvements
+- Updated the Sidebar component to use a tabbed interface
+- Added SVG icons for better visual representation
+- Implemented toast notifications for user feedback
+- Increased sidebar width from 280px to 320px to prevent layer buttons from being cut off
+- Added Project Settings modal accessible from the top bar
 
-### The Decision: Stick with Vue3-Pixi + Pixi.js v7
-After careful consideration, we decided to use vue3-pixi with Pixi.js v7 for the following reasons:
+### 5. Assets Management
+- Created an `AssetsPanel.vue` component for the sidebar
+- Implemented asset storage in IndexedDB with the ability to switch to cloud storage
+- Added file upload and asset selection functionality
+- Created an assets modal for selecting files in the Properties panel
+- Designed a flexible storage service that supports multiple backends (IndexedDB, Netlify, MinIO, etc.)
+- Added asset preview and management capabilities
 
-#### Benefits of Vue3-Pixi:
-1. **Declarative Component Syntax**: Clean, readable templates with familiar Vue patterns
-2. **Reactive Updates**: Automatic re-rendering when Vue data changes
-3. **Component Composition**: Easy to create reusable visual components
-4. **Event Handling**: Native Vue event syntax (@pointerdown, @render, etc.)
-5. **Vue DevTools Integration**: Inspect Pixi objects as Vue components
-
-#### Can We Still Do Everything?
-**YES!** Vue3-pixi with Pixi.js v7 supports all our advanced features:
-- ✅ **Mesh Warping**: Full access to PIXI.Mesh and custom geometries
-- ✅ **Custom Shaders**: PIXI.Shader.from() works perfectly
-- ✅ **Video Textures**: PIXI.Texture.from(video) supported
-- ✅ **Complex Geometries**: Full geometry manipulation capabilities
-- ✅ **Blend Modes**: All blend modes available
-- ✅ **Filters/Effects**: Full filter pipeline access
-
-#### Implementation Approach:
-- Removed conflicting Pixi.js v8 dependency
-- Rewritten CanvasStage.vue using vue3-pixi components
-- Maintained all advanced features (warping, shaders, etc.)
-- Cleaner code with better Vue integration
-
-### Example: Mesh Warping with Vue3-Pixi
-```vue
-<Mesh
-  v-if="layer.warp?.enabled && warpMeshes[layer.id]"
-  :geometry="warpMeshes[layer.id].geometry"
-  :shader="warpMeshes[layer.id].shader"
-  @pointerdown="onLayerPointerDown($event, layer)"
-/>
-```
-
-The mesh geometry and shader are created using standard Pixi.js v7 APIs, then passed as props to the vue3-pixi Mesh component. Best of both worlds!
-
-## Current Architecture
-
-### Layer System
-- **Types**: image, video, url, html, shader, text
-- **Properties**: 
-  - Position: `x`, `y` (flat properties)
-  - Size: `width`, `height`
-  - Visual: `opacity`, `blendMode`, `visible`
-  - Warp: `{ enabled, points: [{x,y}, ...] }`
-  - Content: Type-specific data
-
-### Canvas Rendering (Vue3-Pixi)
-- Uses `<Application>` component for Pixi app
-- `<Container>` for layer grouping
-- `<Sprite>` for images/videos
-- `<Mesh>` for warped content and shaders
-- `<Graphics>` for shapes and overlays
-- Reactive updates via Vue watchers
-
-### Storage System
-- **Local**: IndexedDB via `idb` library
-- **Cloud**: Netlify Functions + Blobs
-- **Auto-save**: Every 30 seconds
-- **Format**: JSON with base64 encoded assets
-
-## Next Steps
-
-1. **Implement Missing Layer Types**
-   - Text layers with custom fonts
-   - Proper HTML/URL rendering
-
-2. **Complete Warp System**
-   - Smooth handle dragging
-   - Mesh subdivision controls
-   - Perspective correction
-
-3. **Effects System**
-   - Port effects to Pixi filters
-   - Real-time parameter adjustment
-   - Effect stacking/ordering
-
-4. **Shader Editor**
-   - Monaco editor integration
-   - Live preview
-   - Uniform controls
-
-5. **Performance Optimization**
-   - Texture caching
-   - Layer culling
-   - WebGL state management
-
-6. **Export Features**
-   - Canvas to image/video
-   - Project packaging
-   - Code generation 
+All implementations follow Vue 3 best practices, include proper error handling, and maintain the existing application architecture while enhancing functionality and stability. 

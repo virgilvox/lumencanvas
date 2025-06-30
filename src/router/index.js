@@ -1,18 +1,24 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import EditorPage from '../pages/EditorPage.vue';
+import ProjectorPage from '../pages/ProjectorPage.vue';
 
 const routes = [
   {
     path: '/',
-    name: 'Editor',
-    component: EditorPage,
+    name: 'editor',
+    component: EditorPage
   },
-  // Other routes like /sign-in, /projector/:id will be added here
+  {
+    path: '/projector/:id',
+    name: 'projector',
+    component: ProjectorPage,
+    props: true
+  }
 ];
 
 const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes
 });
 
 export default router; 

@@ -7,9 +7,7 @@
     <div class="center-tools">
       <div class="tool-group segmented">
         <button class="tool-button">Scene ▾</button>
-        <button class="tool-button" @click="addImageLayer">+Layer</button>
         <button class="tool-button" @click="toggleMask">Mask (M)</button>
-        <button class="tool-button" @click="addShaderLayer">Shader (F2)</button>
         <button class="tool-button" @click="togglePreview">Preview (P)</button>
       </div>
       
@@ -30,11 +28,38 @@
         >
           <Redo :size="16" />
         </button>
+        <button 
+          class="tool-button"
+          @click="toggleBackupManager"
+          title="Backups & History"
+        >
+          <History :size="16" />
+        </button>
       </div>
     </div>
 
     <div class="right-tools">
       <div class="tool-group">
+        <button 
+          class="tool-button projector-button"
+          @click="openProjectorWindow"
+          title="Open Projector View"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <polyline points="9 21 3 21 3 15"></polyline>
+            <line x1="21" y1="3" x2="14" y2="10"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+          <span>Projector</span>
+        </button>
+        <button 
+          class="tool-button"
+          @click="toggleProjectSettings"
+          title="Project Settings"
+        >
+          <Settings :size="16" />
+        </button>
         <button 
           class="tool-button"
           @click="handleExport"
@@ -68,24 +93,185 @@
         {{ toastMessage }}
       </div>
     </div>
+
+    <!-- Preview Modal -->
+    <PreviewModal 
+      v-model="showPreviewModal"
+    >
+      <template #preview-content>
+        <div class="preview-content">
+          <!-- Here you would render your canvas content -->
+          <div 
+            class="preview-canvas"
+            :style="{
+              width: `${projectStore.canvasWidth}px`,
+              height: `${projectStore.canvasHeight}px`,
+              backgroundColor: '#000'
+            }"
+          >
+            <!-- For now, just show a placeholder -->
+            <div v-if="layersStore.layers.length === 0" class="no-layers">
+              No layers to preview
+            </div>
+            <!-- In a real implementation, you would render the actual layers here -->
+          </div>
+        </div>
+      </template>
+    </PreviewModal>
+    
+    <!-- Backup Manager Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showBackupManager" class="modal-overlay" @click="closeBackupManager">
+          <div class="modal-container" @click.stop>
+            <div class="modal-header">
+              <h3>Backups & History</h3>
+              <button @click="closeBackupManager" class="close-btn">
+                <X :size="16" />
+              </button>
+            </div>
+            
+            <div class="modal-content">
+              <BackupManager />
+            </div>
+            
+            <div class="modal-footer">
+              <button @click="closeBackupManager" class="close-btn">Close</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+    
+    <!-- Project Settings Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showProjectSettings" class="modal-overlay" @click="closeProjectSettings">
+          <div class="modal-container" @click.stop>
+            <div class="modal-header">
+              <h3>Project Settings</h3>
+              <button @click="closeProjectSettings" class="close-btn">
+                <X :size="16" />
+              </button>
+            </div>
+            
+            <div class="modal-content">
+              <div class="settings-section">
+                <h4>Canvas</h4>
+                <div class="setting-item">
+                  <label>Width</label>
+                  <input 
+                    type="number" 
+                    v-model="canvasWidth" 
+                    @change="updateCanvasSize"
+                  />
+                </div>
+                <div class="setting-item">
+                  <label>Height</label>
+                  <input 
+                    type="number" 
+                    v-model="canvasHeight" 
+                    @change="updateCanvasSize"
+                  />
+                </div>
+                <div class="setting-item">
+                  <label>Background</label>
+                  <input 
+                    type="color" 
+                    v-model="canvasBackground" 
+                    @change="updateCanvasBackground"
+                  />
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <h4>Project Details</h4>
+                <div class="setting-item">
+                  <label>Name</label>
+                  <input 
+                    type="text" 
+                    v-model="projectName" 
+                    @change="updateProjectName"
+                  />
+                </div>
+                <div class="setting-item">
+                  <label>Description</label>
+                  <textarea 
+                    v-model="projectDescription" 
+                    @change="updateProjectDescription"
+                  ></textarea>
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <h4>Storage</h4>
+                <div class="setting-item">
+                  <label>Storage Provider</label>
+                  <select 
+                    v-model="storageProvider" 
+                    @change="updateStorageProvider"
+                  >
+                    <option value="indexeddb">IndexedDB (Local)</option>
+                    <option value="netlify">Netlify Storage</option>
+                    <option value="minio">MinIO</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div v-if="storageProvider === 'custom'" class="setting-item">
+                  <label>API Endpoint</label>
+                  <input 
+                    type="text" 
+                    v-model="customStorageEndpoint" 
+                    placeholder="https://storage-api.example.com"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div class="modal-footer">
+              <button @click="closeProjectSettings" class="cancel-btn">Cancel</button>
+              <button @click="saveProjectSettings" class="save-btn">Save Settings</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </header>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
-import { Save, Download, Upload, Undo, Redo } from 'lucide-vue-next';
+import { Save, Download, Upload, Undo, Redo, Settings, X, Monitor, History } from 'lucide-vue-next';
 import { useLayersStore } from '../store/layers';
 import { useProjectStore } from '../store/project';
 import { useHistoryStore } from '../store/history';
+import { useStorageService } from '../services/storage';
+import { useRouter } from 'vue-router';
+import PreviewModal from './PreviewModal.vue';
+import BackupManager from './BackupManager.vue';
 
 const layersStore = useLayersStore();
 const projectStore = useProjectStore();
 const historyStore = useHistoryStore();
+const router = useRouter();
 const { LayerTypes, addLayer } = layersStore;
+const { STORAGE_PROVIDERS, getCurrentStorageProvider, setStorageProvider } = useStorageService();
 
 // Toast notification state
 const showToast = ref(false);
 const toastMessage = ref('');
+const showPreviewModal = ref(false);
+const showBackupManager = ref(false);
+
+// Project settings modal state
+const showProjectSettings = ref(false);
+const canvasWidth = ref(projectStore.canvasWidth || 1280);
+const canvasHeight = ref(projectStore.canvasHeight || 720);
+const canvasBackground = ref(projectStore.canvasBackground || '#000000');
+const projectName = ref(projectStore.name || 'Untitled Project');
+const projectDescription = ref(projectStore.description || '');
+const storageProvider = ref(getCurrentStorageProvider());
+const customStorageEndpoint = ref('');
 
 // Show a toast message
 function showToastMessage(message, duration = 3000) {
@@ -95,6 +281,18 @@ function showToastMessage(message, duration = 3000) {
   setTimeout(() => {
     showToast.value = false;
   }, duration);
+}
+
+// Open projector in new window
+function openProjectorWindow() {
+  // Get the current project ID
+  const projectId = projectStore.id;
+  
+  // Open the projector page in a new window
+  const projectorUrl = `/projector/${projectId}`;
+  window.open(projectorUrl, '_blank', 'fullscreen=yes,menubar=no,toolbar=no');
+  
+  showToastMessage('Projector view opened in new window');
 }
 
 // Handle export with error handling
@@ -135,6 +333,68 @@ async function handleImport() {
   }
 }
 
+// Project settings methods
+function toggleProjectSettings() {
+  showProjectSettings.value = !showProjectSettings.value;
+  
+  // Initialize values from project store
+  if (showProjectSettings.value) {
+    canvasWidth.value = projectStore.canvasWidth || 1280;
+    canvasHeight.value = projectStore.canvasHeight || 720;
+    canvasBackground.value = projectStore.canvasBackground || '#000000';
+    projectName.value = projectStore.name || 'Untitled Project';
+    projectDescription.value = projectStore.description || '';
+    storageProvider.value = getCurrentStorageProvider();
+  }
+}
+
+function closeProjectSettings() {
+  showProjectSettings.value = false;
+}
+
+// Backup manager methods
+function toggleBackupManager() {
+  showBackupManager.value = !showBackupManager.value;
+}
+
+function closeBackupManager() {
+  showBackupManager.value = false;
+}
+
+function updateCanvasSize() {
+  projectStore.setCanvasSize(
+    parseInt(canvasWidth.value) || 1280,
+    parseInt(canvasHeight.value) || 720
+  );
+}
+
+function updateCanvasBackground() {
+  projectStore.setCanvasBackground(canvasBackground.value);
+}
+
+function updateProjectName() {
+  projectStore.setName(projectName.value);
+}
+
+function updateProjectDescription() {
+  projectStore.setDescription(projectDescription.value);
+}
+
+function updateStorageProvider() {
+  setStorageProvider(storageProvider.value);
+}
+
+function saveProjectSettings() {
+  updateCanvasSize();
+  updateCanvasBackground();
+  updateProjectName();
+  updateProjectDescription();
+  updateStorageProvider();
+  
+  showToastMessage('Project settings saved');
+  closeProjectSettings();
+}
+
 // Computed properties
 const saveStatus = computed(() => {
   if (projectStore.isSaving) return 'Saving...';
@@ -149,25 +409,14 @@ const saveStatus = computed(() => {
   return 'Save';
 });
 
-function addImageLayer() {
-  // For now, default to image layer. Later we can show a menu
-  addLayer(LayerTypes.IMAGE);
-}
-
-function addShaderLayer() {
-  addLayer(LayerTypes.SHADER);
-}
-
 function toggleMask() {
   // TODO: Implement masking functionality
   console.log('Mask toggle - to be implemented');
 }
 
 function togglePreview() {
-  // TODO: Implement preview/projector view
-  console.log('Preview toggle - to be implemented');
+  showPreviewModal.value = !showPreviewModal.value;
 }
-
 </script>
 
 <style scoped>
@@ -243,6 +492,17 @@ function togglePreview() {
   cursor: not-allowed;
 }
 
+.projector-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #2a2a2a;
+}
+
+.projector-button:hover {
+  background-color: #3a3a3a;
+}
+
 .save-button {
   gap: 8px;
   background-color: #12B0FF;
@@ -295,5 +555,197 @@ function togglePreview() {
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.preview-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+}
+
+.preview-canvas {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.no-layers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 1.2rem;
+}
+
+/* Project Settings Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-container {
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #222;
+  border-bottom: 1px solid #333;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #fff;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  color: #fff;
+  background-color: #e53935;
+}
+
+.modal-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.settings-section h4 {
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 12px;
+  color: #E0E0E0;
+  border-bottom: 1px solid #333;
+  padding-bottom: 8px;
+}
+
+.setting-item {
+  display: flex;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.setting-item label {
+  width: 120px;
+  font-size: 14px;
+  color: #aaa;
+}
+
+.setting-item input[type="text"],
+.setting-item input[type="number"],
+.setting-item select {
+  flex: 1;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 8px 12px;
+  color: #E0E0E0;
+  font-size: 14px;
+}
+
+.setting-item textarea {
+  flex: 1;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 8px 12px;
+  color: #E0E0E0;
+  font-size: 14px;
+  min-height: 80px;
+  resize: vertical;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: #222;
+  border-top: 1px solid #333;
+}
+
+.cancel-btn {
+  padding: 8px 16px;
+  background-color: #333;
+  color: #E0E0E0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cancel-btn:hover {
+  background-color: #444;
+}
+
+.save-btn {
+  padding: 8px 16px;
+  background-color: #12B0FF;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.save-btn:hover {
+  background-color: #4acbff;
+}
+
+/* Transitions */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
 }
 </style> 

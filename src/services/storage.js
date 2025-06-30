@@ -1,9 +1,20 @@
 import { openDB } from 'idb';
 
 const DB_NAME = 'lumencanvas';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const PROJECT_STORE = 'projects';
 const ASSETS_STORE = 'assets';
+
+// Storage providers
+const STORAGE_PROVIDERS = {
+  INDEXEDDB: 'indexeddb',
+  NETLIFY: 'netlify',
+  MINIO: 'minio',
+  CUSTOM: 'custom'
+};
+
+// Default storage provider
+let currentProvider = STORAGE_PROVIDERS.INDEXEDDB;
 
 let db = null;
 
@@ -94,7 +105,7 @@ async function initDB() {
   if (db) return db;
   
   db = await openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
+    upgrade(db, oldVersion, newVersion) {
       // Create projects store
       if (!db.objectStoreNames.contains(PROJECT_STORE)) {
         const projectStore = db.createObjectStore(PROJECT_STORE, { 
@@ -275,6 +286,7 @@ export async function importProject(data) {
 
 // Auto-save functionality
 let autoSaveTimeout = null;
+let logAutoSave = false; // Flag to control auto-save logging
 
 export function enableAutoSave(getProjectData, interval = 5000) {
   const doAutoSave = async () => {
@@ -282,7 +294,9 @@ export function enableAutoSave(getProjectData, interval = 5000) {
       const projectData = getProjectData();
       if (projectData && projectData.id) {
         await saveProject(projectData);
-        console.log('Auto-saved project:', projectData.id);
+        if (logAutoSave) {
+          console.log('Auto-saved project:', projectData.id);
+        }
       }
     } catch (error) {
       console.error('Auto-save failed:', error);
@@ -303,6 +317,60 @@ export function enableAutoSave(getProjectData, interval = 5000) {
       clearInterval(autoSaveTimeout);
       autoSaveTimeout = null;
     }
+  };
+}
+
+// Storage Provider Management
+export function setStorageProvider(provider) {
+  if (Object.values(STORAGE_PROVIDERS).includes(provider)) {
+    currentProvider = provider;
+    return true;
+  }
+  return false;
+}
+
+export function getCurrentStorageProvider() {
+  return currentProvider;
+}
+
+// Add the missing getAllAssets function
+export async function getAllAssets() {
+  const db = await initDB();
+  return await db.getAll(ASSETS_STORE);
+}
+
+// Fix the deleteAsset function that was missing
+export async function deleteAsset(id) {
+  const db = await initDB();
+  await db.delete(ASSETS_STORE, id);
+}
+
+// Fix the useStorageService function to include all necessary functions
+export function useStorageService() {
+  return {
+    // Projects
+    saveProject,
+    getProject,
+    getAllProjects,
+    deleteProject,
+    exportProject,
+    importProject,
+    
+    // Assets
+    saveAsset,
+    getAsset,
+    getProjectAssets,
+    getAllAssets,
+    deleteAsset,
+    saveBlobAsset,
+    
+    // Auto-save
+    enableAutoSave,
+    
+    // Provider management
+    setStorageProvider,
+    getCurrentStorageProvider,
+    STORAGE_PROVIDERS
   };
 }
 

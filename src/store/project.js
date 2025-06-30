@@ -10,6 +10,8 @@ import {
   saveBlobAsset
 } from '../services/storage';
 import { projectSchema, validateProject, createEmptyProject } from '../schemas/projectSchema';
+import localBackup from '../services/localBackup';
+import api from '../services/api';
 
 export const useProjectStore = defineStore('project', () => {
   // State
@@ -28,6 +30,8 @@ export const useProjectStore = defineStore('project', () => {
   const isSaving = ref(false);
   const lastSaved = ref(null);
   const isLoading = ref(false);
+  const backupEnabled = ref(true);
+  const cloudSyncEnabled = ref(false);
   // Flag to track if a file picker is currently active
   const filePickerActive = ref(false);
 
@@ -106,7 +110,25 @@ export const useProjectStore = defineStore('project', () => {
     isSaving.value = true;
     try {
       const sanitized = sanitizeForIndexedDB(projectData.value);
+      
+      // Save to IndexedDB
       await saveProjectToDB(sanitized);
+      
+      // Create local backup if enabled
+      if (backupEnabled.value && localBackup.isLocalStorageAvailable()) {
+        localBackup.createBackup(sanitized);
+      }
+      
+      // Sync to cloud if enabled
+      if (cloudSyncEnabled.value) {
+        try {
+          await api.projects.update(projectId.value, sanitized);
+        } catch (error) {
+          console.warn('Failed to sync project to cloud:', error);
+          // Continue even if cloud sync fails
+        }
+      }
+      
       lastSaved.value = new Date();
     } catch (error) {
       console.error('Failed to save project:', error);
@@ -406,6 +428,43 @@ export const useProjectStore = defineStore('project', () => {
     return newProject.metadata.id;
   }
 
+  // Get project backups
+  function getProjectBackups() {
+    if (!projectId.value || !localBackup.isLocalStorageAvailable()) {
+      return [];
+    }
+    
+    return localBackup.getBackups(projectId.value);
+  }
+
+  // Restore project from backup
+  async function restoreFromBackup(timestamp) {
+    if (!projectId.value || !timestamp) return false;
+    
+    try {
+      const backup = localBackup.restoreBackup(projectId.value, timestamp);
+      if (!backup) return false;
+      
+      // Load the backup data
+      await loadProject(backup.id);
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to restore from backup:', error);
+      return false;
+    }
+  }
+
+  // Toggle backup enabled
+  function toggleBackup(enabled) {
+    backupEnabled.value = enabled;
+  }
+
+  // Toggle cloud sync enabled
+  function toggleCloudSync(enabled) {
+    cloudSyncEnabled.value = enabled;
+  }
+
   // Watch for changes and trigger save
   let saveTimeout = null;
   watch(
@@ -437,6 +496,8 @@ export const useProjectStore = defineStore('project', () => {
     lastSaved,
     isLoading,
     filePickerActive,
+    backupEnabled,
+    cloudSyncEnabled,
     
     // Computed
     hasUnsavedChanges,
@@ -453,5 +514,9 @@ export const useProjectStore = defineStore('project', () => {
     createNewProject,
     exportProjectAsJson,
     importProjectFromJson,
+    getProjectBackups,
+    restoreFromBackup,
+    toggleBackup,
+    toggleCloudSync
   };
 });

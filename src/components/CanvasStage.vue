@@ -2,47 +2,70 @@
   <div 
     class="canvas-container" 
     ref="containerRef"
+    @wheel.prevent="onWheel"
+    @mousedown="onCanvasMouseDown"
   >
-    <Application
-      ref="appRef"
-      :width="projectStore.canvasWidth"
-      :height="projectStore.canvasHeight"
-      :background="0x000000"
-      :antialias="true"
-      @init="onInit"
+    <div class="zoom-controls">
+      <button class="zoom-button" @click="zoomOut" :disabled="zoom <= 0.25">-</button>
+      <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
+      <button class="zoom-button" @click="zoomIn" :disabled="zoom >= 3">+</button>
+      <button class="zoom-button fit" @click="resetZoom">Fit</button>
+    </div>
+    
+    <div 
+      class="canvas-wrapper"
+      :style="{
+        transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`,
+        transformOrigin: '50% 50%'
+      }"
     >
-      <container>
-        <!-- Render each layer using LayerRenderer -->
-        <LayerRenderer
-          v-for="layer in layers"
-          :key="layer.id"
-          :layer="layer"
-          :canvas-size="{ width: projectStore.canvasWidth, height: projectStore.canvasHeight }"
-          @pointerdown="onLayerPointerDown($event, layer)"
-          @request-edit="$emit('requestEdit', layer)"
-        />
-
-        <!-- Selection outline and warp handles -->
-        <container v-if="selectedLayer && selectedLayer.warp?.enabled">
-          <graphics @render="drawSelectionOutline" />
-          <container v-if="selectedLayer.warp?.enabled">
-            <WarpHandle
-              v-for="(point, index) in selectedLayer.warp.points"
-              :key="`handle-${index}`"
-              :id="`${selectedLayer.id}-${index}`"
-              :x="point.x"
-              :y="point.y"
-              @update:position="pos => updateWarpPoint(index, pos)"
-            />
+      <application
+        ref="appRef"
+        :width="projectStore.canvasWidth"
+        :height="projectStore.canvasHeight"
+        :background="0x000000"
+        :antialias="true"
+        @init="onInit"
+      >
+        <container>
+          <!-- Canvas bounding box - only outline, no gridlines -->
+          <graphics ref="boundingBoxRef" @render="drawCanvasBoundingBox" />
+          
+          <!-- Render each layer using LayerRenderer -->
+          <LayerRenderer
+            v-for="layer in layers"
+            :key="layer.id"
+            :layer="layer"
+            :canvas-width="projectStore.canvasWidth"
+            :canvas-height="projectStore.canvasHeight"
+            :selected="selectedLayers.includes(layer.id)"
+            :is-edit-mode="true"
+            @pointerdown="onLayerPointerDown($event, layer)"
+            @select="selectLayer"
+          />
+          
+          <!-- Selection outline and warp handles -->
+          <container v-if="selectedLayer && selectedLayer.warp?.enabled">
+            <graphics @render="drawSelectionOutline" />
+            <container v-if="selectedLayer.warp?.enabled">
+              <WarpHandle
+                v-for="(point, index) in selectedLayer.warp.points"
+                :key="`handle-${index}`"
+                :id="`${selectedLayer.id}-${index}`"
+                :x="point.x"
+                :y="point.y"
+                @update:position="pos => updateWarpPoint(index, pos)"
+              />
+            </container>
           </container>
         </container>
-      </container>
-    </Application>
+      </application>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Application } from 'vue3-pixi';
 import { useLayersStore } from '../store/layers';
@@ -59,11 +82,24 @@ const { layers, selectedLayer } = storeToRefs(layersStore);
 
 const appRef = ref(null);
 const containerRef = ref(null);
+const boundingBoxRef = ref(null);
+const zoom = ref(1);
+const panX = ref(0);
+const panY = ref(0);
+const isPanning = ref(false);
+const lastPanPosition = ref({ x: 0, y: 0 });
+const selectedLayers = ref([]);
+const selectedHandleIndex = ref(-1);
 
 // This initialization function just initializes the app
 const onInit = (app) => {
   appRef.value = app;
 };
+
+function selectLayer(layerId) {
+  selectedLayers.value = [layerId];
+  layersStore.selectLayer(layerId);
+}
 
 // Convert screen coordinates to canvas coordinates
 function getCanvasPosition(clientX, clientY) {
@@ -71,9 +107,101 @@ function getCanvasPosition(clientX, clientY) {
   if (!canvasRect) return null;
   
   return {
-    x: clientX - canvasRect.left,
-    y: clientY - canvasRect.top
+    x: (clientX - canvasRect.left) / zoom.value,
+    y: (clientY - canvasRect.top) / zoom.value
   };
+}
+
+// Draw only the canvas bounding box without gridlines
+function drawCanvasBoundingBox(renderer) {
+  if (!boundingBoxRef.value) return;
+  
+  const graphics = boundingBoxRef.value;
+  const width = projectStore.canvasWidth;
+  const height = projectStore.canvasHeight;
+  
+  // Clear previous drawing
+  graphics.clear();
+  
+  // Draw only bounding box outline
+  graphics.lineStyle(1, 0x666666, 0.8);
+  graphics.drawRect(0, 0, width, height);
+}
+
+// Zoom functions
+function zoomIn() {
+  if (zoom.value < 3) {
+    zoom.value = Math.min(3, zoom.value * 1.2);
+  }
+}
+
+function zoomOut() {
+  if (zoom.value > 0.25) {
+    zoom.value = Math.max(0.25, zoom.value / 1.2);
+  }
+}
+
+function resetZoom() {
+  zoom.value = 1;
+  panX.value = 0;
+  panY.value = 0;
+}
+
+function onWheel(event) {
+  // Zoom with Ctrl + wheel
+  if (event.ctrlKey || event.metaKey) {
+    if (event.deltaY < 0) {
+      zoomIn();
+    } else {
+      zoomOut();
+    }
+    return;
+  }
+  
+  // Pan with Shift + wheel or middle mouse button
+  if (event.shiftKey || event.buttons === 4) {
+    const factor = 10 / zoom.value;
+    if (event.deltaY !== 0) {
+      panY.value += event.deltaY > 0 ? -factor : factor;
+    }
+    if (event.deltaX !== 0) {
+      panX.value += event.deltaX > 0 ? -factor : factor;
+    }
+  }
+}
+
+function onCanvasMouseDown(event) {
+  // Don't interfere with layer dragging
+  if (event.target !== containerRef.value && event.target !== appRef.value?.$el) {
+    return;
+  }
+
+  // Middle mouse button or shift + left mouse for panning
+  if (event.button === 1 || (event.button === 0 && event.shiftKey)) {
+    isPanning.value = true;
+    lastPanPosition.value = { x: event.clientX, y: event.clientY };
+    
+    const onMouseMove = (moveEvent) => {
+      if (isPanning.value) {
+        const dx = moveEvent.clientX - lastPanPosition.value.x;
+        const dy = moveEvent.clientY - lastPanPosition.value.y;
+        
+        panX.value += dx / zoom.value;
+        panY.value += dy / zoom.value;
+        
+        lastPanPosition.value = { x: moveEvent.clientX, y: moveEvent.clientY };
+      }
+    };
+    
+    const onMouseUp = () => {
+      isPanning.value = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
 }
 
 // Handle layer pointer down event
@@ -81,6 +209,7 @@ const onLayerPointerDown = (event, layer) => {
   try {
     // Select the layer
     layersStore.selectLayer(layer.id);
+    selectLayer(layer.id);
     
     // Get the event target
     const target = event.currentTarget || event.target;
@@ -137,6 +266,7 @@ const onLayerPointerDown = (event, layer) => {
     
     // Prevent default to avoid text selection, etc.
     if (event.preventDefault) event.preventDefault();
+    event.stopPropagation();
   } catch (err) {
     console.error('Error in onLayerPointerDown:', err);
   }
@@ -354,7 +484,7 @@ onMounted(() => {
     }
   });
   
-  // Enable edit mode by default
+  // Enable edit mode by default for selected layer
   if (selectedLayer.value && !selectedLayer.value.warp?.enabled) {
     layersStore.updateLayer(selectedLayer.value.id, {
       warp: { ...selectedLayer.value.warp, enabled: true },
@@ -386,84 +516,81 @@ const drawSelectionOutline = (graphics) => {
   graphics.closePath();
 };
 
-// Handle pointer down event
-function onPointerDown(event) {
-  try {
-    const target = event.currentTarget;
-    if (!target) return;
-    
-    // Get layer ID from target
-    const layerId = parseInt(target.layerId || target.dataset?.layerId);
-    if (!layerId) return;
-    
-    // Find layer
-    const layer = layersStore.layers.find(l => l.id === layerId);
-    if (!layer) return;
-    
-    // Get pointer position
-    let pointerX, pointerY;
-    
-    if (event.data && event.data.global) {
-      pointerX = event.data.global.x;
-      pointerY = event.data.global.y;
-    } else if (event.global) {
-      pointerX = event.global.x;
-      pointerY = event.global.y;
-    } else if (event.clientX !== undefined) {
-      const pos = getCanvasPosition(event.clientX, event.clientY);
-      if (pos) {
-        pointerX = pos.x;
-        pointerY = pos.y;
-      }
+// Watch for changes in canvas dimensions
+watch(
+  () => [projectStore.canvasWidth, projectStore.canvasHeight],
+  () => {
+    if (boundingBoxRef.value) {
+      drawCanvasBoundingBox();
     }
-    
-    if (pointerX === undefined || pointerY === undefined) return;
-    
-    // Calculate offset from pointer to layer origin
-    const offsetX = pointerX - layer.x;
-    const offsetY = pointerY - layer.y;
-    
-    // Store drag data
-    target._dragData = {
-      layerId,
-      offsetX,
-      offsetY,
-      startX: layer.x,
-      startY: layer.y,
-      // Store a deep copy of the initial warp points
-      startWarpPoints: layer.warp && layer.warp.points ? 
-        layer.warp.points.map(p => ({ x: p.x, y: p.y })) : 
-        []
-    };
-    
-    // Set up pointer capture
-    if (typeof target.setPointerCapture === 'function' && event.pointerId !== undefined) {
-      target.setPointerCapture(event.pointerId);
-    }
-    
-    // Add event listeners
-    if (typeof target.addEventListener === 'function') {
-      target.addEventListener('pointermove', onPointerMove);
-      target.addEventListener('pointerup', onPointerUp);
-      target.addEventListener('pointercancel', onPointerUp);
-    }
-    
-    // Stop event propagation
-    event.stopPropagation();
-  } catch (err) {
-    console.error('Error in onPointerDown:', err);
   }
-}
+);
 </script>
 
 <style scoped>
 .canvas-container {
+  position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  background-color: #121212;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #000000;
-  overflow: hidden;
+}
+
+.canvas-wrapper {
+  position: relative;
+  transition: transform 0.1s ease-out;
+}
+
+.zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  padding: 4px 8px;
+  z-index: 100;
+}
+
+.zoom-button {
+  width: 24px;
+  height: 24px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin: 0 2px;
+}
+
+.zoom-button:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.zoom-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.zoom-button.fit {
+  width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.zoom-level {
+  color: white;
+  font-size: 12px;
+  margin: 0 8px;
+  min-width: 40px;
+  text-align: center;
 }
 </style> 

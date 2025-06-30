@@ -1,79 +1,160 @@
-import { getAuth } from "@clerk/backend";
-import { getStore } from "@netlify/kv";
+/**
+ * Netlify function for handling project operations
+ */
 
-export const handler = async (event) => {
-  // Protect the function with Clerk authentication
-  const { userId } = getAuth(event);
-  if (!userId) {
-    return {
-      statusCode: 401,
-      body: JSON.stringify({ error: "Unauthenticated" }),
+// Helper function to format response
+function formatResponse(statusCode, body) {
+  return {
+    statusCode,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*', // For CORS
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
+    },
+    body: JSON.stringify(body)
+  };
+}
+
+// Mock database for demo purposes
+// In a real app, this would be replaced with a proper database
+const mockProjects = {
+  projects: {},
+  
+  // Get all projects
+  getAll() {
+    return Object.values(this.projects);
+  },
+  
+  // Get project by ID
+  getById(id) {
+    return this.projects[id] || null;
+  },
+  
+  // Create a new project
+  create(projectData) {
+    const id = projectData.id || `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Ensure project has required fields
+    const project = {
+      id,
+      metadata: {
+        id,
+        name: projectData.metadata?.name || projectData.name || 'Untitled Project',
+        description: projectData.metadata?.description || projectData.description || '',
+        created: projectData.metadata?.created || new Date().toISOString(),
+        modified: new Date().toISOString()
+      },
+      canvas: projectData.canvas || {
+        width: 800,
+        height: 600,
+        background: '#000000',
+        blendMode: 'normal'
+      },
+      layers: projectData.layers || [],
+      ...projectData
     };
+    
+    this.projects[id] = project;
+    return project;
+  },
+  
+  // Update a project
+  update(id, projectData) {
+    if (!this.projects[id]) return null;
+    
+    // Update project
+    this.projects[id] = {
+      ...this.projects[id],
+      ...projectData,
+      metadata: {
+        ...this.projects[id].metadata,
+        ...projectData.metadata,
+        modified: new Date().toISOString()
+      }
+    };
+    
+    return this.projects[id];
+  },
+  
+  // Delete a project
+  delete(id) {
+    if (!this.projects[id]) return false;
+    delete this.projects[id];
+    return true;
   }
+};
 
-  const projectStore = await getStore("projects");
-
-  const { httpMethod, path } = event;
-  const pathParts = path.split("/").filter(Boolean);
-  const projectId = pathParts[2];
-
-
+// Handle HTTP methods
+exports.handler = async function(event, context) {
+  // Handle preflight OPTIONS request
+  if (event.httpMethod === 'OPTIONS') {
+    return formatResponse(200, {});
+  }
+  
+  // Get project ID from path if present
+  const path = event.path.replace('/.netlify/functions/projects', '');
+  const segments = path.split('/').filter(Boolean);
+  const id = segments[0];
+  
   try {
-    switch (httpMethod) {
-      case "GET":
-        if (projectId) {
-          // GET /api/projects/:id
-          const project = await projectStore.get(projectId);
-          if (!project || project.owner !== userId) {
-            return { statusCode: 404, body: JSON.stringify({ error: "Project not found" }) };
-          }
-          return { statusCode: 200, body: JSON.stringify(project) };
-        } else {
-          // GET /api/projects
-          const allKeys = await projectStore.list({ prefix: `${userId}:` });
-          const projects = await Promise.all(
-            allKeys.keys.map(async ({ name }) => await projectStore.get(name))
-          );
-          return { statusCode: 200, body: JSON.stringify(projects) };
+    // Handle different HTTP methods
+    switch (event.httpMethod) {
+      case 'GET':
+        // Get all projects
+        if (!id) {
+          return formatResponse(200, mockProjects.getAll());
         }
-      
-      case "POST":
-        // POST /api/projects
-        const { name } = JSON.parse(event.body);
-        const newId = `proj_${Math.random().toString(36).substr(2, 9)}`;
-        const newProject = {
-          id: newId,
-          owner: userId,
-          name: name || "Untitled Project",
-          updated: new Date().toISOString(),
-          scenes: [],
-          assets: {},
-        };
-        await projectStore.set(`${userId}:${newId}`, newProject);
-        return { statusCode: 201, body: JSON.stringify(newProject) };
-
-      case "PUT":
-        // PUT /api/projects/:id
-        if (!projectId) return { statusCode: 400, body: "Project ID required" };
-        const updates = JSON.parse(event.body);
-        const existing = await projectStore.get(`${userId}:${projectId}`);
-        if (!existing) return { statusCode: 404, body: "Project not found" };
         
-        const updatedProject = { ...existing, ...updates, id: projectId, owner: userId, updated: new Date().toISOString() };
-        await projectStore.set(`${userId}:${projectId}`, updatedProject);
-        return { statusCode: 200, body: JSON.stringify(updatedProject) };
-
-      case "DELETE":
-        // DELETE /api/projects/:id
-         if (!projectId) return { statusCode: 400, body: "Project ID required" };
-        await projectStore.delete(`${userId}:${projectId}`);
-        // Note: Blob deletion would also happen here
-        return { statusCode: 204 };
-
+        // Get project by ID
+        const project = mockProjects.getById(id);
+        if (!project) {
+          return formatResponse(404, { error: 'Project not found' });
+        }
+        
+        return formatResponse(200, project);
+      
+      case 'POST':
+        // Create a new project
+        const projectData = JSON.parse(event.body);
+        const newProject = mockProjects.create(projectData);
+        
+        return formatResponse(201, newProject);
+      
+      case 'PUT':
+        // Update a project
+        if (!id) {
+          return formatResponse(400, { error: 'Project ID is required' });
+        }
+        
+        const updateData = JSON.parse(event.body);
+        const updatedProject = mockProjects.update(id, updateData);
+        
+        if (!updatedProject) {
+          return formatResponse(404, { error: 'Project not found' });
+        }
+        
+        return formatResponse(200, updatedProject);
+      
+      case 'DELETE':
+        // Delete a project
+        if (!id) {
+          return formatResponse(400, { error: 'Project ID is required' });
+        }
+        
+        const deleted = mockProjects.delete(id);
+        
+        if (!deleted) {
+          return formatResponse(404, { error: 'Project not found' });
+        }
+        
+        return formatResponse(204, {});
+      
       default:
-        return { statusCode: 405, body: "Method Not Allowed" };
+        return formatResponse(405, { error: 'Method not allowed' });
     }
   } catch (error) {
-    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+    console.error('Error processing request:', error);
+    return formatResponse(500, { error: 'Internal server error', details: error.message });
   }
 }; 
