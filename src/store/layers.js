@@ -265,25 +265,101 @@ export const useLayersStore = defineStore('layers', () => {
   
   // Import layers from a project file
   function importLayers(layersData) {
-    if (!Array.isArray(layersData)) return;
+    // Ensure layersData is an array
+    if (!Array.isArray(layersData)) {
+      console.warn('importLayers received invalid data:', layersData);
+      layers.value = [];
+      selectedLayerId.value = null;
+      return;
+    }
     
-    // Clear existing layers
-    layers.value = [];
-    
-    // Import layers
-    layersData.forEach(layer => {
-      layers.value.push(layer);
+    try {
+      // Reset nextId to ensure we don't reuse IDs
+      nextId = 1;
       
-      // Update nextId if needed
-      if (layer.id >= nextId) {
-        nextId = layer.id + 1;
+      // Clear existing layers
+      layers.value = [];
+      
+      // Import layers with validation
+      layersData.forEach(layer => {
+        // Skip invalid layers
+        if (!layer || typeof layer !== 'object') {
+          console.warn('Skipping invalid layer:', layer);
+          return;
+        }
+        
+        try {
+          // Ensure layer has required properties
+          const validLayer = {
+            id: typeof layer.id === 'number' ? layer.id : nextId++,
+            type: layer.type && typeof layer.type === 'string' ? layer.type : LayerTypes.HTML,
+            name: layer.name && typeof layer.name === 'string' ? layer.name : `Layer ${nextId}`,
+            visible: typeof layer.visible === 'boolean' ? layer.visible : true,
+            opacity: typeof layer.opacity === 'number' && layer.opacity >= 0 && layer.opacity <= 1 ? 
+              layer.opacity : 1,
+            blendMode: layer.blendMode && typeof layer.blendMode === 'string' ? 
+              layer.blendMode : BlendModes.NORMAL,
+            x: typeof layer.x === 'number' ? layer.x : 0,
+            y: typeof layer.y === 'number' ? layer.y : 0,
+            width: typeof layer.width === 'number' && layer.width > 0 ? layer.width : 200,
+            height: typeof layer.height === 'number' && layer.height > 0 ? layer.height : 200,
+            scale: layer.scale && typeof layer.scale === 'object' ? 
+              { 
+                x: typeof layer.scale.x === 'number' ? layer.scale.x : 1, 
+                y: typeof layer.scale.y === 'number' ? layer.scale.y : 1 
+              } : 
+              { x: 1, y: 1 },
+            rotation: typeof layer.rotation === 'number' ? layer.rotation : 0,
+            content: layer.content && typeof layer.content === 'object' ? 
+              layer.content : getDefaultContent(layer.type || LayerTypes.HTML),
+            properties: layer.properties && typeof layer.properties === 'object' ? 
+              layer.properties : getDefaultProperties(layer.type || LayerTypes.HTML),
+          };
+          
+          // Handle warp points with extra validation
+          if (layer.warp && typeof layer.warp === 'object' && Array.isArray(layer.warp.points)) {
+            validLayer.warp = {
+              enabled: typeof layer.warp.enabled === 'boolean' ? layer.warp.enabled : false,
+              points: layer.warp.points
+                .filter(p => p && typeof p === 'object' && typeof p.x === 'number' && typeof p.y === 'number')
+                .map(p => ({ x: p.x, y: p.y }))
+            };
+          } else {
+            // Default warp configuration
+            validLayer.warp = {
+              enabled: false,
+              points: [
+                { x: validLayer.x - validLayer.width / 2, y: validLayer.y - validLayer.height / 2 },
+                { x: validLayer.x + validLayer.width / 2, y: validLayer.y - validLayer.height / 2 },
+                { x: validLayer.x + validLayer.width / 2, y: validLayer.y + validLayer.height / 2 },
+                { x: validLayer.x - validLayer.width / 2, y: validLayer.y + validLayer.height / 2 },
+              ]
+            };
+          }
+          
+          // Add the validated layer
+          layers.value.push(validLayer);
+          
+          // Update nextId if needed
+          if (validLayer.id >= nextId) {
+            nextId = validLayer.id + 1;
+          }
+        } catch (layerError) {
+          console.error('Error processing layer:', layerError);
+          // Continue with next layer
+        }
+      });
+      
+      // Select first layer if available
+      if (layers.value.length > 0) {
+        selectedLayerId.value = layers.value[0].id;
+      } else {
+        selectedLayerId.value = null;
       }
-    });
-    
-    // Select first layer if available
-    if (layers.value.length > 0) {
-      selectedLayerId.value = layers.value[0].id;
-    } else {
+    } catch (error) {
+      console.error('Error importing layers:', error);
+      // Reset to empty state on critical error
+      layers.value = [];
       selectedLayerId.value = null;
     }
   }

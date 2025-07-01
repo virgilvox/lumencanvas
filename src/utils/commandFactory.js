@@ -147,14 +147,29 @@ export const commandFactory = {
     return {
       type: 'REMOVE_LAYER',
       execute() {
-        layersStore.removeLayer(layerId);
+        // Find the layer index and remove directly from the array
+        // instead of calling layersStore.removeLayer() which would cause recursion
+        const index = layersStore.layers.findIndex(layer => layer.id === layerId);
+        if (index !== -1) {
+          layersStore.layers.splice(index, 1);
+          
+          // Update selected layer if it was the one being removed
+          if (layersStore.selectedLayer && layersStore.selectedLayer.id === layerId) {
+            layersStore.selectedLayer = null;
+          }
+        }
       },
       undo() {
-        // We need to restore the layer with its original ID and state
-        layersStore.restoreLayer(layerState);
-      },
-      timestamp: Date.now(),
-      description: `Remove layer ${layerId}`
+        // Add the layer back
+        if (layerState) {
+          layersStore.layers.push(layerState);
+          
+          // Re-select the layer if it was selected before
+          if (layerState.selected) {
+            layersStore.selectedLayer = layerState;
+          }
+        }
+      }
     };
   },
   

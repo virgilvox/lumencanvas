@@ -20,6 +20,7 @@ export const useProjectStore = defineStore('project', () => {
   const projectDescription = ref('');
   const canvasWidth = ref(800);
   const canvasHeight = ref(600);
+  const canvasBackground = ref('#000000');
   const blendMode = ref('normal');
   const warpPoints = ref([
     { x: 200, y: 150 },  // top-left
@@ -59,7 +60,7 @@ export const useProjectStore = defineStore('project', () => {
     canvas: {
       width: canvasWidth.value,
       height: canvasHeight.value,
-      background: '#000000', // Default black background
+      background: canvasBackground.value, // Use the canvasBackground ref
       blendMode: blendMode.value,
     },
     layers: layersStore.layers,
@@ -151,6 +152,12 @@ export const useProjectStore = defineStore('project', () => {
       const validation = validateProject(project);
       if (!validation.valid) {
         console.warn('Project validation warnings:', validation.errors);
+        
+        // Fix common issues automatically
+        if (!Array.isArray(project.layers)) {
+          project.layers = [];
+          console.warn('Fixed missing layers array in project');
+        }
       }
 
       // Load project metadata - use top-level id as primary source
@@ -161,6 +168,7 @@ export const useProjectStore = defineStore('project', () => {
       // Load canvas settings
       canvasWidth.value = project.canvas?.width || project.canvasWidth || 800;
       canvasHeight.value = project.canvas?.height || project.canvasHeight || 600;
+      canvasBackground.value = project.canvas?.background || '#000000';
       blendMode.value = project.canvas?.blendMode || project.blendMode || 'normal';
       
       // Load warp points (legacy support)
@@ -168,10 +176,17 @@ export const useProjectStore = defineStore('project', () => {
         warpPoints.value = project.warpPoints;
       }
 
-      // Load layers
-      if (project.layers && project.layers.length > 0) {
+      // Load layers - ensure we have a valid array
+      if (Array.isArray(project.layers)) {
         // Use new importLayers method
         layersStore.importLayers(project.layers);
+      } else {
+        // Initialize with empty layers array if missing
+        layersStore.importLayers([]);
+        console.warn('Project had invalid layers property, initialized with empty array');
+        
+        // Save the fixed project back to the database
+        await saveProject();
       }
 
       // Clear history
@@ -414,6 +429,7 @@ export const useProjectStore = defineStore('project', () => {
     projectDescription.value = newProject.metadata.description;
     canvasWidth.value = newProject.canvas.width;
     canvasHeight.value = newProject.canvas.height;
+    canvasBackground.value = newProject.canvas.background;
     blendMode.value = newProject.canvas.blendMode;
     
     // Clear layers
@@ -445,8 +461,42 @@ export const useProjectStore = defineStore('project', () => {
       const backup = localBackup.restoreBackup(projectId.value, timestamp);
       if (!backup) return false;
       
+      // Additional validation to ensure backup has required properties
+      if (!backup.id && !backup.metadata?.id) {
+        console.error('Invalid backup: missing project ID');
+        return false;
+      }
+      
+      // Ensure layers is always an array before loading
+      if (!Array.isArray(backup.layers)) {
+        backup.layers = [];
+        console.warn('Fixed missing layers array in backup before loading');
+      }
+      
+      // Create a sanitized version of the backup to ensure all required fields are present
+      const sanitizedBackup = {
+        ...backup,
+        id: backup.id || backup.metadata?.id,
+        metadata: backup.metadata || {
+          id: backup.id,
+          name: backup.name || 'Restored Project',
+          description: backup.description || '',
+          modified: backup.modified || new Date().toISOString()
+        },
+        canvas: backup.canvas || {
+          width: backup.canvasWidth || 800,
+          height: backup.canvasHeight || 600,
+          background: '#000000',
+          blendMode: backup.blendMode || 'normal'
+        },
+        layers: Array.isArray(backup.layers) ? backup.layers : []
+      };
+      
+      // Save the sanitized backup to ensure it's properly structured
+      await saveProjectToDB(sanitizedBackup);
+      
       // Load the backup data
-      await loadProject(backup.id);
+      await loadProject(sanitizedBackup.id);
       
       return true;
     } catch (error) {
@@ -463,6 +513,31 @@ export const useProjectStore = defineStore('project', () => {
   // Toggle cloud sync enabled
   function toggleCloudSync(enabled) {
     cloudSyncEnabled.value = enabled;
+  }
+
+  // Set canvas size
+  function setCanvasSize(width, height) {
+    canvasWidth.value = width;
+    canvasHeight.value = height;
+    saveProject();
+  }
+
+  // Set canvas background
+  function setCanvasBackground(color) {
+    canvasBackground.value = color;
+    saveProject();
+  }
+
+  // Set project name
+  function setName(name) {
+    projectName.value = name;
+    saveProject();
+  }
+
+  // Set project description
+  function setDescription(description) {
+    projectDescription.value = description;
+    saveProject();
   }
 
   // Watch for changes and trigger save
@@ -483,6 +558,11 @@ export const useProjectStore = defineStore('project', () => {
     { deep: true }
   );
 
+  // Set file picker active state
+  function setFilePickerActive(active) {
+    filePickerActive.value = active;
+  }
+
   return {
     // State
     projectId,
@@ -490,6 +570,7 @@ export const useProjectStore = defineStore('project', () => {
     projectDescription,
     canvasWidth,
     canvasHeight,
+    canvasBackground,
     blendMode,
     warpPoints,
     isSaving,
@@ -517,6 +598,11 @@ export const useProjectStore = defineStore('project', () => {
     getProjectBackups,
     restoreFromBackup,
     toggleBackup,
-    toggleCloudSync
+    toggleCloudSync,
+    setFilePickerActive,
+    setCanvasSize,
+    setCanvasBackground,
+    setName,
+    setDescription
   };
 });

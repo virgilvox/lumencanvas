@@ -86,7 +86,7 @@ const mockProjects = {
 };
 
 // Handle HTTP methods
-exports.handler = async function(event, context) {
+export default async function(event, context) {
   // Handle preflight OPTIONS request
   if (event.httpMethod === 'OPTIONS') {
     return formatResponse(200, {});

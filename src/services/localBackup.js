@@ -98,7 +98,53 @@ export function restoreBackup(projectId, timestamp) {
     
     if (!backupData) return null;
     
-    return safeParse(backupData);
+    const restoredProject = safeParse(backupData);
+    
+    // Ensure the project has a valid structure
+    if (!restoredProject) return null;
+    
+    // Perform deep validation and fix common issues
+    
+    // 1. Ensure ID exists
+    if (!restoredProject.id && (!restoredProject.metadata || !restoredProject.metadata.id)) {
+      restoredProject.id = projectId;
+      if (restoredProject.metadata) {
+        restoredProject.metadata.id = projectId;
+      } else {
+        restoredProject.metadata = { id: projectId };
+      }
+      console.warn('Fixed missing project ID in restored project');
+    }
+    
+    // 2. Ensure layers is always an array
+    if (!Array.isArray(restoredProject.layers)) {
+      restoredProject.layers = [];
+      console.warn('Fixed missing layers array in restored project');
+    }
+    
+    // 3. Ensure canvas exists
+    if (!restoredProject.canvas) {
+      restoredProject.canvas = {
+        width: restoredProject.canvasWidth || 800,
+        height: restoredProject.canvasHeight || 600,
+        background: '#000000',
+        blendMode: restoredProject.blendMode || 'normal'
+      };
+      console.warn('Fixed missing canvas object in restored project');
+    }
+    
+    // 4. Ensure metadata exists
+    if (!restoredProject.metadata) {
+      restoredProject.metadata = {
+        id: restoredProject.id || projectId,
+        name: restoredProject.name || 'Restored Project',
+        description: restoredProject.description || '',
+        modified: new Date().toISOString()
+      };
+      console.warn('Fixed missing metadata in restored project');
+    }
+    
+    return restoredProject;
   } catch (error) {
     console.error('Failed to restore backup:', error);
     return null;

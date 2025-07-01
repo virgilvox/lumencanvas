@@ -1,7 +1,13 @@
 <template>
-  <div class="properties-panel">
+  <div class="properties-panel" :class="{ 'collapsed': isCollapsed }">
     <div class="panel-header">
-      <h3>Properties</h3>
+      <div class="header-left">
+        <h3>Properties</h3>
+        <button class="collapse-button" @click="toggleCollapse">
+          <ChevronUp v-if="!isCollapsed" :size="16" />
+          <ChevronDown v-else :size="16" />
+        </button>
+      </div>
       <button 
         v-if="selectedLayer" 
         class="close-button"
@@ -11,7 +17,7 @@
       </button>
     </div>
 
-    <div v-if="selectedLayer" class="panel-content">
+    <div v-if="selectedLayer && !isCollapsed" class="panel-content">
       <div class="section">
         <div class="section-header">
           <h4>{{ layerTypeDisplay }} Layer</h4>
@@ -31,7 +37,7 @@
           <input 
             type="text" 
             v-model="selectedLayer.name" 
-            @change="historyStore.pushCommand(commandFactory.updateLayer(selectedLayer.id, { name: selectedLayer.name }, { name: selectedLayer.name }))" 
+            @change="updateName" 
           />
         </div>
 
@@ -39,22 +45,22 @@
         <div class="property">
           <label>Position</label>
           <div class="input-group">
-            <input type="number" v-model="posX" placeholder="X" @change="updatePosition"/>
-            <input type="number" v-model="posY" placeholder="Y" @change="updatePosition"/>
+            <input type="number" v-model="posX" placeholder="X" @change="updatePosition" @input="updatePreviewPosition"/>
+            <input type="number" v-model="posY" placeholder="Y" @change="updatePosition" @input="updatePreviewPosition"/>
           </div>
         </div>
 
         <div class="property">
           <label>Scale</label>
           <div class="input-group">
-            <input type="number" v-model="scaleX" placeholder="X" step="0.1" @change="updateScale"/>
-            <input type="number" v-model="scaleY" placeholder="Y" step="0.1" @change="updateScale"/>
+            <input type="number" v-model="scaleX" placeholder="X" step="0.1" @change="updateScale" @input="updatePreviewScale"/>
+            <input type="number" v-model="scaleY" placeholder="Y" step="0.1" @change="updateScale" @input="updatePreviewScale"/>
           </div>
         </div>
 
         <div class="property">
           <label>Rotation</label>
-          <input type="number" v-model="rotation" @change="updateRotation"/>
+          <input type="number" v-model="rotation" @change="updateRotation" @input="updatePreviewRotation"/>
         </div>
 
         <!-- Appearance properties -->
@@ -67,6 +73,7 @@
             step="0.01" 
             v-model="opacity" 
             @change="updateOpacity"
+            @input="updatePreviewOpacity"
           />
           <span>{{ Math.round(opacity * 100) }}%</span>
         </div>
@@ -144,7 +151,7 @@
       </div>
     </div>
 
-    <div v-else class="panel-content empty">
+    <div v-else-if="!isCollapsed" class="panel-content empty">
       <p>Select a layer to edit its properties</p>
     </div>
 
@@ -153,111 +160,14 @@
       {{ toastMessage }}
     </div>
 
-    <!-- Add Assets Modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="showAssetsModal" class="modal-overlay" @click="closeAssetsModal">
-          <div class="modal-container" @click.stop>
-            <div class="modal-header">
-              <h3>Select Asset</h3>
-              <button @click="closeAssetsModal" class="close-btn">
-                <X :size="16" />
-              </button>
-            </div>
-            
-            <div class="modal-content">
-              <div class="assets-browser">
-                <!-- Here we would integrate VueFinder or a custom file browser -->
-                <div class="assets-tabs">
-                  <button 
-                    class="assets-tab"
-                    :class="{ active: assetsTab === 'project' }"
-                    @click="assetsTab = 'project'"
-                  >
-                    Project Assets
-                  </button>
-                  <button 
-                    class="assets-tab"
-                    :class="{ active: assetsTab === 'upload' }"
-                    @click="assetsTab = 'upload'"
-                  >
-                    Upload New
-                  </button>
-                </div>
-                
-                <div v-if="assetsTab === 'project'" class="assets-list">
-                  <div v-if="loading" class="loading-state">
-                    Loading assets...
-                  </div>
-                  
-                  <div v-else-if="projectAssets.length === 0" class="empty-state">
-                    No assets yet. Upload some files first.
-                  </div>
-                  
-                  <div 
-                    v-else
-                    v-for="asset in filteredAssets" 
-                    :key="asset.id" 
-                    class="asset-item"
-                    :class="{ selected: selectedAssetId === asset.id }"
-                    @click="selectAsset(asset)"
-                  >
-                    <div class="asset-preview">
-                      <img v-if="asset.type === 'image'" :src="asset.url || asset.data" alt="Asset preview" />
-                      <div v-else-if="asset.type === 'video'" class="video-preview">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                        </svg>
-                      </div>
-                      <div v-else class="generic-preview">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                          <polyline points="14 2 14 8 20 8"></polyline>
-                          <line x1="16" y1="13" x2="8" y2="13"></line>
-                          <line x1="16" y1="17" x2="8" y2="17"></line>
-                          <polyline points="10 9 9 9 8 9"></polyline>
-                        </svg>
-                      </div>
-                    </div>
-                    
-                    <div class="asset-info">
-                      <div class="asset-name">{{ asset.name }}</div>
-                      <div class="asset-type">{{ asset.type }}</div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div v-if="assetsTab === 'upload'" class="upload-area">
-                  <label class="upload-zone">
-                    <div class="upload-content">
-                      <Upload :size="32" />
-                      <p>Drop files here or click to upload</p>
-                    </div>
-                    <input 
-                      type="file" 
-                      :accept="acceptedFileTypes" 
-                      @change="handleFileUpload"
-                      class="file-input"
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-            
-            <div class="modal-footer">
-              <button @click="closeAssetsModal" class="cancel-btn">Cancel</button>
-              <button 
-                @click="useSelectedAsset" 
-                class="select-btn"
-                :disabled="!selectedAssetId"
-              >
-                Select
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- Use the AssetsModal component -->
+    <AssetsModal 
+      v-model="showAssetsModal"
+      :title="'Select Asset'"
+      :assetTypeFilter="assetTypeFilter"
+      @select-asset="handleAssetSelected"
+      @toast="showToastMessage"
+    />
   </div>
 </template>
 
@@ -267,8 +177,8 @@ import { storeToRefs } from 'pinia';
 import { useLayersStore } from '../store/layers';
 import { useHistoryStore } from '../store/history';
 import { commandFactory } from '../utils/commandFactory';
-import { useStorageService } from '../services/storage';
-import { X, Code, Upload } from 'lucide-vue-next';
+import { X, Code, Upload, ChevronUp, ChevronDown } from 'lucide-vue-next';
+import AssetsModal from './AssetsModal.vue';
 
 const emit = defineEmits(['requestEdit']);
 
@@ -276,7 +186,6 @@ const layersStore = useLayersStore();
 const historyStore = useHistoryStore();
 const { selectedLayer } = storeToRefs(layersStore);
 const { LayerTypes, BlendModes, updateLayer, clearSelection } = layersStore;
-const { getProjectAssets, saveAsset } = useStorageService();
 
 // Input values for properties (to avoid direct binding)
 const posX = ref(0);
@@ -287,6 +196,7 @@ const rotation = ref(0);
 const opacity = ref(1);
 const blendMode = ref('normal');
 const visible = ref(true);
+const isCollapsed = ref(false);
 
 // Add toast notification state
 const showToast = ref(false);
@@ -294,11 +204,12 @@ const toastMessage = ref('');
 
 // Assets modal state
 const showAssetsModal = ref(false);
-const assetsTab = ref('project');
-const projectAssets = ref([]);
-const selectedAssetId = ref(null);
 const assetTypeFilter = ref(null);
-const loading = ref(false);
+
+// Toggle panel collapse
+function toggleCollapse() {
+  isCollapsed.value = !isCollapsed.value;
+}
 
 // Update input values when selected layer changes
 watch(selectedLayer, (layer) => {
@@ -311,6 +222,29 @@ watch(selectedLayer, (layer) => {
     opacity.value = layer.opacity;
     blendMode.value = layer.blendMode || 'normal';
     visible.value = layer.visible;
+  }
+}, { immediate: true, deep: true });
+
+// Add additional watch for layer properties to keep form inputs in sync
+watch(() => [
+  selectedLayer.value?.x,
+  selectedLayer.value?.y,
+  selectedLayer.value?.scale?.x,
+  selectedLayer.value?.scale?.y,
+  selectedLayer.value?.rotation,
+  selectedLayer.value?.opacity,
+  selectedLayer.value?.blendMode,
+  selectedLayer.value?.visible
+], ([x, y, scaleXVal, scaleYVal, rot, op, blend, vis]) => {
+  if (selectedLayer.value) {
+    posX.value = x;
+    posY.value = y;
+    scaleX.value = scaleXVal || 1;
+    scaleY.value = scaleYVal || 1;
+    rotation.value = rot || 0;
+    opacity.value = op;
+    blendMode.value = blend || 'normal';
+    visible.value = vis;
   }
 }, { immediate: true });
 
@@ -406,53 +340,10 @@ function showToastMessage(message, duration = 3000) {
 function openAssetsModal(type) {
   showAssetsModal.value = true;
   assetTypeFilter.value = type;
-  assetsTab.value = 'project';
-  selectedAssetId.value = null;
-  loadProjectAssets();
 }
 
-function closeAssetsModal() {
-  showAssetsModal.value = false;
-  selectedAssetId.value = null;
-}
-
-async function loadProjectAssets() {
-  loading.value = true;
-  try {
-    // For now, we'll get assets for the current project
-    // In a real implementation, we would get the current project ID
-    const projectId = 'current';
-    const assets = await getProjectAssets(projectId);
-    
-    if (assets && Array.isArray(assets)) {
-      projectAssets.value = assets;
-    } else {
-      projectAssets.value = [];
-    }
-  } catch (error) {
-    console.error('Failed to load assets:', error);
-    showToastMessage('Failed to load assets');
-    projectAssets.value = [];
-  } finally {
-    loading.value = false;
-  }
-}
-
-function selectAsset(asset) {
-  selectedAssetId.value = asset.id;
-}
-
-function useSelectedAsset() {
-  if (!selectedAssetId.value || !selectedLayer.value) {
-    closeAssetsModal();
-    return;
-  }
-  
-  const asset = projectAssets.value.find(a => a.id === selectedAssetId.value);
-  if (!asset) {
-    closeAssetsModal();
-    return;
-  }
+function handleAssetSelected(asset) {
+  if (!selectedLayer.value) return;
   
   const layer = selectedLayer.value;
   const originalState = { content: { ...layer.content } };
@@ -462,75 +353,7 @@ function useSelectedAsset() {
     commandFactory.updateLayer(layer.id, updates, originalState)
   );
   
-  closeAssetsModal();
   showToastMessage(`Asset applied to layer`);
-}
-
-// Handle file upload for image/video layers
-async function handleFileUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  
-  try {
-    const fileType = file.type.split('/')[0]; // 'image', 'video', etc.
-    
-    // Create a URL for the file
-    const url = URL.createObjectURL(file);
-    
-    // Create an asset object
-    const asset = {
-      id: `asset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name: file.name,
-      type: fileType,
-      url,
-      file,
-      projectId: 'current' // This would be the actual project ID in a real implementation
-    };
-    
-    // Save to storage
-    await saveAsset(asset);
-    
-    // Add to assets list and select it
-    projectAssets.value.push(asset);
-    selectedAssetId.value = asset.id;
-    
-    // Switch to project tab to show the new asset
-    assetsTab.value = 'project';
-    
-    showToastMessage('File uploaded successfully');
-  } catch (error) {
-    console.error('Failed to upload file:', error);
-    showToastMessage('Failed to upload file');
-  }
-  
-  // Reset the file input
-  event.target.value = '';
-}
-
-// Handle shader code update
-function updateShaderCode(code) {
-  if (!selectedLayer.value || selectedLayer.value.type !== 'shader') return;
-  
-  const layer = selectedLayer.value;
-  const originalState = { content: { ...layer.content } };
-  const updates = { content: { ...layer.content, fragmentShader: code } };
-  
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
-  );
-}
-
-// Handle HTML content update
-function updateHtmlContent(content) {
-  if (!selectedLayer.value || selectedLayer.value.type !== 'html') return;
-  
-  const layer = selectedLayer.value;
-  const originalState = { content: { ...layer.content } };
-  const updates = { content: { ...layer.content, html: content } };
-  
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
-  );
 }
 
 // Handle URL update
@@ -568,70 +391,63 @@ const hasPreview = computed(() => {
   return layer && (layer.type === 'image' || layer.type === 'video') && layer.content?.src;
 });
 
-// Filter assets based on the current type filter
-const filteredAssets = computed(() => {
-  if (!assetTypeFilter.value) return projectAssets.value;
+// Preview functions for immediate UI update
+function updatePreviewPosition() {
+  if (!selectedLayer.value) return;
   
-  return projectAssets.value.filter(asset => asset.type === assetTypeFilter.value);
-});
-
-// Get the accepted file types for the current layer
-const acceptedFileTypes = computed(() => {
-  if (!assetTypeFilter.value) return '';
-  
-  if (assetTypeFilter.value === 'image') {
-    return 'image/*';
+  // Update the UI immediately for responsive feel
+  if (selectedLayer.value) {
+    selectedLayer.value.x = parseFloat(posX.value) || 0;
+    selectedLayer.value.y = parseFloat(posY.value) || 0;
   }
+}
+
+function updatePreviewScale() {
+  if (!selectedLayer.value) return;
   
-  if (assetTypeFilter.value === 'video') {
-    return 'video/*';
+  // Update the UI immediately for responsive feel
+  if (selectedLayer.value) {
+    if (!selectedLayer.value.scale) selectedLayer.value.scale = { x: 1, y: 1 };
+    selectedLayer.value.scale.x = parseFloat(scaleX.value) || 1;
+    selectedLayer.value.scale.y = parseFloat(scaleY.value) || 1;
   }
+}
+
+function updatePreviewRotation() {
+  if (!selectedLayer.value) return;
   
-  return '';
-});
+  // Update the UI immediately for responsive feel
+  if (selectedLayer.value) {
+    selectedLayer.value.rotation = parseFloat(rotation.value) || 0;
+  }
+}
 
-// Determine if the layer is a shader
-const isShaderLayer = computed(() => {
-  const layer = selectedLayer.value;
-  return layer && layer.type === 'shader';
-});
+function updatePreviewOpacity() {
+  if (!selectedLayer.value) return;
+  
+  // Update the UI immediately for responsive feel
+  if (selectedLayer.value) {
+    selectedLayer.value.opacity = parseFloat(opacity.value);
+  }
+}
 
-// Determine if the layer is HTML
-const isHtmlLayer = computed(() => {
-  const layer = selectedLayer.value;
-  return layer && layer.type === 'html';
-});
+// Update layer name
+function updateName() {
+  if (!selectedLayer.value) return;
+  
+  const originalState = { name: selectedLayer.value.name };
+  const updates = { name: selectedLayer.value.name };
+  
+  historyStore.pushCommand(
+    commandFactory.updateLayer(selectedLayer.value.id, updates, originalState)
+  );
+}
 
-// Determine if the layer is URL
-const isUrlLayer = computed(() => {
-  const layer = selectedLayer.value;
-  return layer && layer.type === 'url';
-});
-
-// Open code editor for shader or HTML layers
+// Open code editor (emits event to parent)
 function openCodeEditor() {
   if (!selectedLayer.value) return;
   
-  const layer = selectedLayer.value;
-  if (layer.type === 'shader' || layer.type === 'html') {
-    window.dispatchEvent(new CustomEvent('open-code-editor', { detail: layer }));
-  }
-}
-
-function updateProperties(props) {
-  if (selectedLayer.value) {
-    updateLayer(selectedLayer.value.id, {
-      properties: { ...selectedLayer.value.properties, ...props }
-    });
-  }
-}
-
-function updateContent(content) {
-  if (selectedLayer.value) {
-    updateLayer(selectedLayer.value.id, {
-      content: { ...selectedLayer.value.content, ...content }
-    });
-  }
+  emit('requestEdit', selectedLayer.value);
 }
 
 // Get the layer type display name
@@ -662,6 +478,14 @@ const layerTypeDisplay = computed(() => {
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   z-index: 100;
+  color: #e0e0e0;
+  transition: transform 0.3s ease;
+  transform-origin: top center;
+}
+
+.properties-panel.collapsed {
+  transform: translateY(calc(-100% + 46px)); /* Move up but leave header visible */
+  overflow: hidden;
 }
 
 .panel-header {
@@ -672,13 +496,21 @@ const layerTypeDisplay = computed(() => {
   border-bottom: 1px solid #333;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .panel-header h3 {
   font-size: 14px;
   font-weight: 500;
   margin: 0;
+  color: #e0e0e0;
 }
 
-.close-btn {
+.close-button,
+.collapse-button {
   background: none;
   border: none;
   color: #888;
@@ -690,8 +522,9 @@ const layerTypeDisplay = computed(() => {
   transition: color 0.2s;
 }
 
-.close-btn:hover {
-  color: #E0E0E0;
+.close-button:hover,
+.collapse-button:hover {
+  color: #e0e0e0;
 }
 
 .panel-content {
@@ -700,12 +533,14 @@ const layerTypeDisplay = computed(() => {
   overflow-y: auto;
 }
 
-.section {
-  margin-bottom: 20px;
+.panel-content.empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: #888;
 }
 
-.section:last-child {
-  margin-bottom: 0;
+.section {
+  margin-bottom: 20px;
 }
 
 .section-header {
@@ -720,10 +555,13 @@ const layerTypeDisplay = computed(() => {
   font-weight: 500;
   color: #888;
   text-transform: uppercase;
+  margin: 0;
 }
 
 .property {
   margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
 }
 
 .property:last-child {
@@ -733,41 +571,34 @@ const layerTypeDisplay = computed(() => {
 .property label {
   font-size: 14px;
   color: #aaa;
-  width: 80px;
-  flex-shrink: 0;
+  margin-bottom: 6px;
 }
 
 .property input[type="text"],
 .property input[type="number"],
 .property select {
-  flex: 1;
+  width: 100%;
   background-color: #2a2a2a;
   border: 1px solid #444;
   border-radius: 4px;
   padding: 6px 8px;
-  color: #E0E0E0;
+  color: #e0e0e0;
   font-size: 14px;
 }
 
 .input-group {
   display: flex;
   gap: 8px;
-  flex: 1;
 }
 
 .input-group input {
-  width: calc(50% - 4px);
-  flex: 1 1 50%;
+  flex: 1;
 }
 
 .visibility-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.visibility-toggle input[type="checkbox"] {
-  width: auto;
 }
 
 .preview-container {
@@ -781,27 +612,7 @@ const layerTypeDisplay = computed(() => {
   border-radius: 4px;
 }
 
-.file-select-button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px;
-  background-color: #12B0FF;
-  color: #000;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.file-select-button:hover {
-  background-color: #4acbff;
-}
-
+.file-select-button,
 .code-button {
   width: 100%;
   display: flex;
@@ -819,6 +630,7 @@ const layerTypeDisplay = computed(() => {
   transition: background-color 0.2s;
 }
 
+.file-select-button:hover,
 .code-button:hover {
   background-color: #4acbff;
 }
@@ -829,13 +641,23 @@ const layerTypeDisplay = computed(() => {
   gap: 8px;
 }
 
-.checkbox-group input[type="checkbox"] {
-  width: auto;
+input[type="range"] {
+  width: 80%;
+  -webkit-appearance: none;
+  height: 4px;
+  background: #444;
+  border-radius: 2px;
+  outline: none;
+  margin-right: 8px;
 }
 
-.empty {
-  text-align: center;
-  padding: 12px;
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #12B0FF;
+  cursor: pointer;
 }
 
 /* Toast notification styles */
@@ -845,278 +667,10 @@ const layerTypeDisplay = computed(() => {
   left: 50%;
   transform: translateX(-50%);
   background-color: #333;
-  color: #E0E0E0;
+  color: #e0e0e0;
   padding: 12px 20px;
   border-radius: 4px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   z-index: 1000;
-}
-
-/* Assets Modal styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.75);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-container {
-  background-color: #1a1a1a;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 800px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background-color: #222;
-  border-bottom: 1px solid #333;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: #fff;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: #aaa;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  color: #fff;
-  background-color: #e53935;
-}
-
-.modal-content {
-  flex: 1;
-  overflow: auto;
-  padding: 16px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 12px 16px;
-  background-color: #222;
-  border-top: 1px solid #333;
-}
-
-.cancel-btn {
-  padding: 8px 16px;
-  background-color: #333;
-  color: #E0E0E0;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.cancel-btn:hover {
-  background-color: #444;
-}
-
-.select-btn {
-  padding: 8px 16px;
-  background-color: #12B0FF;
-  color: #000;
-  border: none;
-  border-radius: 4px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.select-btn:hover:not(:disabled) {
-  background-color: #4acbff;
-}
-
-.select-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Assets browser styles */
-.assets-browser {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.assets-tabs {
-  display: flex;
-  border-bottom: 1px solid #333;
-  margin-bottom: 16px;
-}
-
-.assets-tab {
-  padding: 8px 16px;
-  background: none;
-  border: none;
-  color: #aaa;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-  border-bottom: 2px solid transparent;
-}
-
-.assets-tab:hover {
-  color: #E0E0E0;
-}
-
-.assets-tab.active {
-  color: #E0E0E0;
-  border-bottom-color: #12B0FF;
-}
-
-.assets-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 12px;
-  padding: 8px;
-}
-
-.asset-item {
-  display: flex;
-  flex-direction: column;
-  border-radius: 4px;
-  overflow: hidden;
-  background-color: #222;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 2px solid transparent;
-}
-
-.asset-item:hover {
-  background-color: #2a2a2a;
-}
-
-.asset-item.selected {
-  border-color: #12B0FF;
-}
-
-.asset-preview {
-  height: 100px;
-  background-color: #333;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.asset-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.video-preview,
-.generic-preview {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #888;
-}
-
-.asset-info {
-  padding: 8px;
-}
-
-.asset-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: #E0E0E0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.asset-type {
-  font-size: 11px;
-  color: #888;
-  text-transform: capitalize;
-}
-
-.upload-area {
-  flex: 1;
-  padding: 16px;
-}
-
-.upload-zone {
-  width: 100%;
-  height: 200px;
-  border: 2px dashed #444;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.upload-zone:hover {
-  border-color: #12B0FF;
-  background-color: rgba(18, 176, 255, 0.05);
-}
-
-.upload-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: #888;
-}
-
-.upload-content p {
-  margin: 8px 0 0;
-}
-
-.file-input {
-  display: none;
-}
-
-.empty-state {
-  grid-column: 1 / -1;
-  padding: 32px;
-  text-align: center;
-  color: #666;
-}
-
-/* Transitions */
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
 }
 </style>

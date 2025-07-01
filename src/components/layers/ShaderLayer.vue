@@ -53,11 +53,16 @@ const defaultVertex = `
 function updateShader() {
   if (!props.layer.content.code) return;
   try {
+    // Create uniforms with proper types
+    const width = props.layer.width || 200;
+    const height = props.layer.height || 200;
+    
     const uniforms = {
-      time: 0,
-      resolution: [props.layer.width || 200, props.layer.height || 200],
+      time: 0.0,
+      resolution: [width, height],
       ...(props.layer.content.uniforms || {}),
     };
+    
     shader.value = PIXI.Shader.from(defaultVertex, props.layer.content.code, uniforms);
   } catch (error) {
     console.error('Shader compilation error:', error);
@@ -78,6 +83,8 @@ function updateGeometry() {
     const y = props.layer.y || 0;
     const width = props.layer.width || 200;
     const height = props.layer.height || 200;
+    
+    // Calculate corners properly based on center position
     vertices = [
       x - width/2, y - height/2,  // top-left
       x + width/2, y - height/2,  // top-right
@@ -86,25 +93,15 @@ function updateGeometry() {
     ];
   }
   
+  // Create or update geometry
   if (!geometry.value) {
-     geometry.value = new PIXI.Geometry()
+    geometry.value = new PIXI.Geometry()
       .addAttribute('aVertexPosition', vertices, 2)
       .addAttribute('aTextureCoord', [0, 0, 1, 0, 1, 1, 0, 1], 2)
-      .addIndex(getQuadIndices(points));
+      .addIndex([0, 1, 2, 0, 2, 3]); // Use consistent indices
   } else {
     geometry.value.getBuffer('aVertexPosition').update(new Float32Array(vertices));
-    geometry.value.getIndex().update(new Uint16Array(getQuadIndices(points)));
   }
-}
-
-function getQuadIndices(points) {
-  if (!points || points.length !== 4) return [0, 1, 2, 0, 2, 3];
-  const p = points;
-  const d02_sq = Math.pow(p[2].x - p[0].x, 2) + Math.pow(p[2].y - p[0].y, 2);
-  const d13_sq = Math.pow(p[3].x - p[1].x, 2) + Math.pow(p[3].y - p[1].y, 2);
-  return d13_sq < d02_sq
-    ? [0, 1, 3, 1, 2, 3]
-    : [0, 1, 2, 0, 2, 3];
 }
 
 function tick() {
@@ -121,7 +118,8 @@ onMounted(() => {
   updateGeometry();
   updateShader();
   
-  if (props.layer.content.code.includes('// GLSL Fragment Shader')) {
+  // Only request edit if it's a new shader with the default template
+  if (props.layer.content.code && props.layer.content.code.includes('// GLSL Fragment Shader')) {
     setTimeout(() => emit('requestEdit'), 100);
   }
   
@@ -143,5 +141,4 @@ onUnmounted(() => {
 watch(() => props.layer.content.code, updateShader);
 watch(() => props.layer.warp?.points, updateGeometry, { deep: true });
 watch(() => [props.layer.x, props.layer.y, props.layer.width, props.layer.height], updateGeometry);
-
 </script>

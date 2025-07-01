@@ -156,6 +156,8 @@ const showControls = ref(true);
 const controlsTimeout = ref(null);
 const projectorContainerRef = ref(null);
 const lastMouseMoveTime = ref(Date.now());
+const broadcastChannel = ref(null);
+const refreshInterval = ref(null);
 
 // Background options
 const backgroundOptions = [
@@ -311,6 +313,52 @@ function handleStorageChange(event) {
   }
 }
 
+// Setup broadcast channel for real-time updates
+function setupBroadcastChannel() {
+  try {
+    broadcastChannel.value = new BroadcastChannel('lumencanvas-updates');
+    
+    broadcastChannel.value.onmessage = (event) => {
+      const data = event.data;
+      
+      if (data.type === 'project-update') {
+        if (data.layers) layers.value = [...data.layers];
+        if (data.canvasWidth) canvasWidth.value = data.canvasWidth;
+        if (data.canvasHeight) canvasHeight.value = data.canvasHeight;
+      }
+    };
+  } catch (error) {
+    console.warn('BroadcastChannel not supported, falling back to polling');
+    // Set up polling refresh instead
+    setupPollingRefresh();
+  }
+}
+
+// Setup polling for updates if broadcast channel isn't available
+function setupPollingRefresh() {
+  refreshInterval.value = setInterval(() => {
+    if (projectId) {
+      refreshProjectData();
+    }
+  }, 2000); // Poll every 2 seconds
+}
+
+// Refresh project data without full reload
+async function refreshProjectData() {
+  try {
+    // Get fresh layers from store
+    if (layersStore.layers && layersStore.layers.length > 0) {
+      layers.value = JSON.parse(JSON.stringify(layersStore.layers));
+    }
+    
+    // Update canvas dimensions from project store
+    canvasWidth.value = projectStore.canvasWidth;
+    canvasHeight.value = projectStore.canvasHeight;
+  } catch (error) {
+    console.error('Failed to refresh project data:', error);
+  }
+}
+
 // Load project data
 async function loadProjectData() {
   if (!projectId) {
@@ -319,25 +367,51 @@ async function loadProjectData() {
   }
   
   try {
-    // Load project from store or storage
-    const project = await projectStore.loadProject(projectId);
-    if (project) {
-      canvasWidth.value = project.canvasWidth || 1280;
-      canvasHeight.value = project.canvasHeight || 720;
-      
-      // Load layers
-      if (layersStore.layers && layersStore.layers.length > 0) {
-        layers.value = layersStore.layers;
-      } else {
-        // Try to get layers from project data
-        layers.value = project.layers || [];
-      }
+    // Load project from store
+    await projectStore.loadProject(projectId);
+    
+    // Set canvas dimensions
+    canvasWidth.value = projectStore.canvasWidth || 1280;
+    canvasHeight.value = projectStore.canvasHeight || 720;
+    
+    // Get layers from store
+    if (layersStore.layers && layersStore.layers.length > 0) {
+      // Clone to avoid reactivity issues
+      layers.value = JSON.parse(JSON.stringify(layersStore.layers));
+    } else {
+      console.warn('No layers found in layersStore');
+      layers.value = [];
     }
+    
+    // Broadcast our presence to the editor
+    sendPresenceSignal();
   } catch (error) {
     console.error('Failed to load project data:', error);
     
     // Fallback to session storage
     loadFromSessionStorage();
+  }
+}
+
+// Send a presence signal to the editor window
+function sendPresenceSignal() {
+  try {
+    if (broadcastChannel.value) {
+      broadcastChannel.value.postMessage({
+        type: 'projector-connected',
+        projectId: projectId
+      });
+    }
+    
+    // Also try window.opener if available
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({
+        type: 'projector-connected',
+        projectId: projectId
+      }, '*');
+    }
+  } catch (error) {
+    console.warn('Failed to send presence signal:', error);
   }
 }
 
@@ -356,8 +430,27 @@ function loadFromSessionStorage() {
   }
 }
 
+// Handle window messages from editor
+function handleWindowMessage(event) {
+  try {
+    const data = event.data;
+    
+    if (data && data.type === 'project-update') {
+      if (data.layers) layers.value = [...data.layers];
+      if (data.canvasWidth) canvasWidth.value = data.canvasWidth;
+      if (data.canvasHeight) canvasHeight.value = data.canvasHeight;
+    }
+  } catch (error) {
+    console.error('Failed to handle window message:', error);
+  }
+}
+
 // Lifecycle hooks
 onMounted(() => {
+  // Set up real-time communication
+  setupBroadcastChannel();
+  
+  // Load initial project data
   loadProjectData();
   
   // Set up event listeners
@@ -368,20 +461,31 @@ onMounted(() => {
   document.addEventListener('mozfullscreenchange', handleFullscreenChange);
   document.addEventListener('MSFullscreenChange', handleFullscreenChange);
   
+  // Listen for messages from editor window
+  window.addEventListener('message', handleWindowMessage);
+  
   // Auto-fit to window
   adjustZoomToFit();
 });
 
 onUnmounted(() => {
+  // Clean up event listeners
   window.removeEventListener('storage', handleStorageChange);
+  window.removeEventListener('message', handleWindowMessage);
   document.removeEventListener('keydown', handleKeyDown);
   document.removeEventListener('fullscreenchange', handleFullscreenChange);
   document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
   document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
   document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
   
-  // Clear any timeouts
+  // Clear any timeouts and intervals
   clearControlsTimeout();
+  if (refreshInterval.value) clearInterval(refreshInterval.value);
+  
+  // Close broadcast channel
+  if (broadcastChannel.value) {
+    broadcastChannel.value.close();
+  }
 });
 
 // Auto-adjust zoom to fit the window

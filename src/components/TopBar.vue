@@ -144,103 +144,12 @@
     </Teleport>
     
     <!-- Project Settings Modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="showProjectSettings" class="modal-overlay" @click="closeProjectSettings">
-          <div class="modal-container" @click.stop>
-            <div class="modal-header">
-              <h3>Project Settings</h3>
-              <button @click="closeProjectSettings" class="close-btn">
-                <X :size="16" />
-              </button>
-            </div>
-            
-            <div class="modal-content">
-              <div class="settings-section">
-                <h4>Canvas</h4>
-                <div class="setting-item">
-                  <label>Width</label>
-                  <input 
-                    type="number" 
-                    v-model="canvasWidth" 
-                    @change="updateCanvasSize"
-                  />
-                </div>
-                <div class="setting-item">
-                  <label>Height</label>
-                  <input 
-                    type="number" 
-                    v-model="canvasHeight" 
-                    @change="updateCanvasSize"
-                  />
-                </div>
-                <div class="setting-item">
-                  <label>Background</label>
-                  <input 
-                    type="color" 
-                    v-model="canvasBackground" 
-                    @change="updateCanvasBackground"
-                  />
-                </div>
-              </div>
-              
-              <div class="settings-section">
-                <h4>Project Details</h4>
-                <div class="setting-item">
-                  <label>Name</label>
-                  <input 
-                    type="text" 
-                    v-model="projectName" 
-                    @change="updateProjectName"
-                  />
-                </div>
-                <div class="setting-item">
-                  <label>Description</label>
-                  <textarea 
-                    v-model="projectDescription" 
-                    @change="updateProjectDescription"
-                  ></textarea>
-                </div>
-              </div>
-              
-              <div class="settings-section">
-                <h4>Storage</h4>
-                <div class="setting-item">
-                  <label>Storage Provider</label>
-                  <select 
-                    v-model="storageProvider" 
-                    @change="updateStorageProvider"
-                  >
-                    <option value="indexeddb">IndexedDB (Local)</option>
-                    <option value="netlify">Netlify Storage</option>
-                    <option value="minio">MinIO</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </div>
-                <div v-if="storageProvider === 'custom'" class="setting-item">
-                  <label>API Endpoint</label>
-                  <input 
-                    type="text" 
-                    v-model="customStorageEndpoint" 
-                    placeholder="https://storage-api.example.com"
-                  />
-                </div>
-              </div>
-            </div>
-            
-            <div class="modal-footer">
-              <button @click="closeProjectSettings" class="cancel-btn">Cancel</button>
-              <button @click="saveProjectSettings" class="save-btn">Save Settings</button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <ProjectSettingsModal v-model="showProjectSettings" @saved="handleProjectSettingsSaved" />
   </header>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
 import { Save, Download, Upload, Undo, Redo, Settings, X, Monitor, History } from 'lucide-vue-next';
 import { useLayersStore } from '../store/layers';
 import { useProjectStore } from '../store/project';
@@ -249,6 +158,7 @@ import { useStorageService } from '../services/storage';
 import { useRouter } from 'vue-router';
 import PreviewModal from './PreviewModal.vue';
 import BackupManager from './BackupManager.vue';
+import ProjectSettingsModal from './ProjectSettingsModal.vue';
 
 const layersStore = useLayersStore();
 const projectStore = useProjectStore();
@@ -260,22 +170,20 @@ const { STORAGE_PROVIDERS, getCurrentStorageProvider, setStorageProvider } = use
 // Toast notification state
 const showToast = ref(false);
 const toastMessage = ref('');
+const toastDuration = ref(3000);
+const saveTimeout = ref(null);
+const projectorWindow = ref(null);
+const broadcastChannel = ref(null);
 const showPreviewModal = ref(false);
 const showBackupManager = ref(false);
 
 // Project settings modal state
 const showProjectSettings = ref(false);
-const canvasWidth = ref(projectStore.canvasWidth || 1280);
-const canvasHeight = ref(projectStore.canvasHeight || 720);
-const canvasBackground = ref(projectStore.canvasBackground || '#000000');
-const projectName = ref(projectStore.name || 'Untitled Project');
-const projectDescription = ref(projectStore.description || '');
-const storageProvider = ref(getCurrentStorageProvider());
-const customStorageEndpoint = ref('');
 
 // Show a toast message
 function showToastMessage(message, duration = 3000) {
   toastMessage.value = message;
+  toastDuration.value = duration;
   showToast.value = true;
   
   setTimeout(() => {
@@ -283,17 +191,167 @@ function showToastMessage(message, duration = 3000) {
   }, duration);
 }
 
+// Create broadcast channel for projector communication
+function setupBroadcastChannel() {
+  try {
+    // Close existing channel if any
+    if (broadcastChannel.value) {
+      broadcastChannel.value.close();
+    }
+    
+    broadcastChannel.value = new BroadcastChannel('lumencanvas-updates');
+    
+    // Listen for messages from projector window
+    broadcastChannel.value.onmessage = (event) => {
+      if (event.data && event.data.type === 'projector-connected') {
+        // Send current state when projector connects
+        sendProjectorUpdate();
+      }
+    };
+    
+    // Set up watchers to send updates to projector
+    watch([() => layersStore.layers, () => projectStore.canvasWidth, () => projectStore.canvasHeight], 
+      () => {
+        sendProjectorUpdate();
+      }, 
+      { deep: true }
+    );
+  } catch (error) {
+    console.warn('BroadcastChannel not supported:', error);
+  }
+}
+
+// Sanitize data for cloning by removing circular references and non-cloneable types
+function sanitizeForCloning(obj) {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  // Handle primitive types
+  if (typeof obj !== 'object') {
+    return obj;
+  }
+  
+  // Handle Date objects
+  if (obj instanceof Date) {
+    return new Date(obj);
+  }
+  
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForCloning(item));
+  }
+  
+  // Handle regular objects
+  const result = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      // Skip functions and non-cloneable values
+      if (typeof obj[key] !== 'function' && key !== '_app' && key !== '_value') {
+        try {
+          result[key] = sanitizeForCloning(obj[key]);
+        } catch (error) {
+          console.warn(`Could not clone property ${key}`, error);
+        }
+      }
+    }
+  }
+  return result;
+}
+
+// Send project updates to projector
+function sendProjectorUpdate() {
+  try {
+    // Create a sanitized copy of the project state to avoid DataCloneError
+    const sanitizedLayers = sanitizeForCloning(layersStore.layers);
+    
+    // Send via BroadcastChannel if available
+    if (broadcastChannel.value) {
+      broadcastChannel.value.postMessage({
+        type: 'project-update',
+        layers: sanitizedLayers,
+        canvasWidth: projectStore.canvasWidth,
+        canvasHeight: projectStore.canvasHeight
+      });
+    }
+    
+    // Also try direct window messaging if we have a reference
+    if (projectorWindow.value && !projectorWindow.value.closed) {
+      projectorWindow.value.postMessage({
+        type: 'project-update',
+        layers: sanitizedLayers,
+        canvasWidth: projectStore.canvasWidth,
+        canvasHeight: projectStore.canvasHeight
+      }, '*');
+    }
+  } catch (error) {
+    console.warn('Failed to send projector update:', error);
+  }
+}
+
 // Open projector in new window
 function openProjectorWindow() {
   // Get the current project ID
-  const projectId = projectStore.id;
+  const projectId = projectStore.projectId;
   
-  // Open the projector page in a new window
-  const projectorUrl = `/projector/${projectId}`;
-  window.open(projectorUrl, '_blank', 'fullscreen=yes,menubar=no,toolbar=no');
-  
-  showToastMessage('Projector view opened in new window');
+  if (!projectId) {
+    showToastMessage('No active project to preview');
+    return;
+  }
+
+  // Check if file picker is active
+  if (projectStore.filePickerActive) {
+    showToastMessage('Cannot open projector while a file dialog is active');
+    return;
+  }
+
+  try {
+    // Create the URL for the projector view
+    const projectorUrl = `/projector/${projectId}`;
+    
+    // Try to use window.open with a slight delay to avoid conflicts with file chooser dialogs
+    setTimeout(() => {
+      try {
+        // Set up broadcast channel for communication before opening window
+        setupBroadcastChannel();
+        
+        // Try to open the projector in a new window
+        projectorWindow.value = window.open(projectorUrl, '_blank', 'width=1024,height=768');
+        
+        // If successful, set up message handling
+        if (projectorWindow.value) {
+          // Send initial data after a slight delay to allow the window to load
+          setTimeout(() => {
+            sendProjectorUpdate();
+          }, 1000);
+        } else {
+          // Fallback if window.open is blocked or returns null
+          showToastMessage('Popup blocked by browser. Using navigation instead.');
+          router.push(projectorUrl);
+        }
+      } catch (error) {
+        console.error('Error opening projector window:', error);
+        showToastMessage('Failed to open projector. Using navigation instead.');
+        router.push(projectorUrl);
+      }
+    }, 300);
+  } catch (error) {
+    console.error('Error preparing projector:', error);
+    showToastMessage('Failed to open projector view');
+  }
 }
+
+// Set up broadcast channel on component mount
+onMounted(() => {
+  setupBroadcastChannel();
+});
+
+// Clean up on unmount
+onUnmounted(() => {
+  if (broadcastChannel.value) {
+    broadcastChannel.value.close();
+  }
+});
 
 // Handle export with error handling
 async function handleExport() {
@@ -336,20 +394,10 @@ async function handleImport() {
 // Project settings methods
 function toggleProjectSettings() {
   showProjectSettings.value = !showProjectSettings.value;
-  
-  // Initialize values from project store
-  if (showProjectSettings.value) {
-    canvasWidth.value = projectStore.canvasWidth || 1280;
-    canvasHeight.value = projectStore.canvasHeight || 720;
-    canvasBackground.value = projectStore.canvasBackground || '#000000';
-    projectName.value = projectStore.name || 'Untitled Project';
-    projectDescription.value = projectStore.description || '';
-    storageProvider.value = getCurrentStorageProvider();
-  }
 }
 
-function closeProjectSettings() {
-  showProjectSettings.value = false;
+function handleProjectSettingsSaved() {
+  showToastMessage('Project settings saved');
 }
 
 // Backup manager methods
@@ -359,40 +407,6 @@ function toggleBackupManager() {
 
 function closeBackupManager() {
   showBackupManager.value = false;
-}
-
-function updateCanvasSize() {
-  projectStore.setCanvasSize(
-    parseInt(canvasWidth.value) || 1280,
-    parseInt(canvasHeight.value) || 720
-  );
-}
-
-function updateCanvasBackground() {
-  projectStore.setCanvasBackground(canvasBackground.value);
-}
-
-function updateProjectName() {
-  projectStore.setName(projectName.value);
-}
-
-function updateProjectDescription() {
-  projectStore.setDescription(projectDescription.value);
-}
-
-function updateStorageProvider() {
-  setStorageProvider(storageProvider.value);
-}
-
-function saveProjectSettings() {
-  updateCanvasSize();
-  updateCanvasBackground();
-  updateProjectName();
-  updateProjectDescription();
-  updateStorageProvider();
-  
-  showToastMessage('Project settings saved');
-  closeProjectSettings();
 }
 
 // Computed properties
