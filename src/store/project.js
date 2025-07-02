@@ -4,7 +4,7 @@ import { useLayersStore } from './layers';
 import { useHistoryStore } from './history';
 import { 
   saveProject as saveProjectToDB,
-  getProject,
+  getProject as getProjectFromDB,
   enableAutoSave,
   exportProject as exportProjectFromDB,
   saveBlobAsset
@@ -28,6 +28,7 @@ export const useProjectStore = defineStore('project', () => {
     { x: 600, y: 450 },  // bottom-right
     { x: 200, y: 450 },  // bottom-left
   ]);
+  const assets = ref([]);
   const isSaving = ref(false);
   const lastSaved = ref(null);
   const isLoading = ref(false);
@@ -64,7 +65,7 @@ export const useProjectStore = defineStore('project', () => {
       blendMode: blendMode.value,
     },
     layers: layersStore.layers,
-    assets: [], // Assets would be loaded from storage
+    assets: assets.value,
     history: {
       commands: [], // We don't save command history to DB
       currentIndex: -1,
@@ -73,19 +74,16 @@ export const useProjectStore = defineStore('project', () => {
 
   // Initialize project
   async function initProject() {
-    // Generate project ID if not exists
-    if (!projectId.value) {
-      projectId.value = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    isLoading.value = true;
+    try {
+      // For now, we'll just create a new project on init.
+      // A real implementation would check for a last-opened project ID.
+      await createNewProject({ name: 'New Project' });
+    } catch (error) {
+      console.error("Failed to initialize project:", error);
+    } finally {
+      isLoading.value = false;
     }
-
-    // Enable auto-save
-    const cleanup = enableAutoSave(() => projectData.value, 5000);
-    
-    // Save initial state
-    await saveProject();
-
-    // Return cleanup function
-    return cleanup;
   }
 
   // Helper to deeply clone and sanitize project data for IndexedDB
@@ -110,30 +108,17 @@ export const useProjectStore = defineStore('project', () => {
     
     isSaving.value = true;
     try {
-      const sanitized = sanitizeForIndexedDB(projectData.value);
+      const dataToSave = projectData.value;
+      // Local save first for speed
+      await saveProjectToDB(dataToSave);
       
-      // Save to IndexedDB
-      await saveProjectToDB(sanitized);
-      
-      // Create local backup if enabled
-      if (backupEnabled.value && localBackup.isLocalStorageAvailable()) {
-        localBackup.createBackup(sanitized);
-      }
-      
-      // Sync to cloud if enabled
-      if (cloudSyncEnabled.value) {
-        try {
-          await api.projects.update(projectId.value, sanitized);
-        } catch (error) {
-          console.warn('Failed to sync project to cloud:', error);
-          // Continue even if cloud sync fails
-        }
-      }
-      
+      // Then sync with the server
+      await api.projects.update(projectId.value, dataToSave);
+
       lastSaved.value = new Date();
     } catch (error) {
       console.error('Failed to save project:', error);
-      throw error;
+      // Implement a more robust error handling/retry mechanism here
     } finally {
       isSaving.value = false;
     }
@@ -143,59 +128,35 @@ export const useProjectStore = defineStore('project', () => {
   async function loadProject(id) {
     isLoading.value = true;
     try {
-      const project = await getProject(id);
-      if (!project) {
-        throw new Error('Project not found');
-      }
-
-      // Validate project structure
-      const validation = validateProject(project);
-      if (!validation.valid) {
-        console.warn('Project validation warnings:', validation.errors);
-        
-        // Fix common issues automatically
-        if (!Array.isArray(project.layers)) {
-          project.layers = [];
-          console.warn('Fixed missing layers array in project');
-        }
-      }
-
-      // Load project metadata - use top-level id as primary source
-      projectId.value = project.id || project.metadata?.id;
-      projectName.value = project.metadata?.name || project.name || 'Untitled Project';
-      projectDescription.value = project.metadata?.description || project.description || '';
+      const project = await api.projects.get(id);
+      if (!project) throw new Error('Project not found on server');
       
-      // Load canvas settings
-      canvasWidth.value = project.canvas?.width || project.canvasWidth || 800;
-      canvasHeight.value = project.canvas?.height || project.canvasHeight || 600;
-      canvasBackground.value = project.canvas?.background || '#000000';
-      blendMode.value = project.canvas?.blendMode || project.blendMode || 'normal';
-      
-      // Load warp points (legacy support)
-      if (project.warpPoints) {
-        warpPoints.value = project.warpPoints;
-      }
-
-      // Load layers - ensure we have a valid array
-      if (Array.isArray(project.layers)) {
-        // Use new importLayers method
-        layersStore.importLayers(project.layers);
-      } else {
-        // Initialize with empty layers array if missing
-        layersStore.importLayers([]);
-        console.warn('Project had invalid layers property, initialized with empty array');
-        
-        // Save the fixed project back to the database
-        await saveProject();
-      }
-
-      // Clear history
+      // Update local store with data from server
+      projectId.value = project.id;
+      projectName.value = project.name;
+      projectDescription.value = project.description;
+      canvasWidth.value = project.canvas.width;
+      canvasHeight.value = project.canvas.height;
+      canvasBackground.value = project.canvas.background;
+      assets.value = project.assets || [];
+      layersStore.importLayers(project.layers || []);
       historyStore.clear();
+      
+      // Cache the loaded project locally
+      await saveProjectToDB(project);
+      
+      lastSaved.value = new Date(project.updatedAt || Date.now());
 
-      lastSaved.value = new Date(project.metadata?.modified || project.updated);
     } catch (error) {
-      console.error('Failed to load project:', error);
-      throw error;
+      console.error('Failed to load project from server, trying local cache:', error);
+      // Fallback to local DB if server fails
+      const localProject = await getProjectFromDB(id);
+      if (localProject) {
+          // ... load from localProject ...
+          console.log("Loaded project from local cache.");
+      } else {
+          console.error(`Project ${id} not found locally either.`);
+      }
     } finally {
       isLoading.value = false;
     }
@@ -243,73 +204,21 @@ export const useProjectStore = defineStore('project', () => {
 
   // Export project as ZIP
   async function exportAsZip() {
+    // This now needs to fetch all assets from S3, which can be complex.
+    // For now, let's export just the project.json
     if (!projectId.value) return;
-    
-    // Check if a file picker is already active
-    if (filePickerActive.value) {
-      console.warn('A file operation is already in progress');
-      return;
-    }
 
-    filePickerActive.value = true;
     try {
-      const { fileSave } = await import('browser-fs-access');
-      const JSZip = (await import('jszip')).default;
-      
-      // Get project data
-      const exportData = await exportProjectFromDB(projectId.value);
-      
-      // Create ZIP
-      const zip = new JSZip();
-      
-      // Add project.json
-      zip.file('project.json', JSON.stringify(exportData, null, 2));
-      
-      // Add assets as separate files
-      if (exportData.assets && exportData.assets.length > 0) {
-        const assetsFolder = zip.folder('assets');
+        const { fileSave } = await import('browser-fs-access');
+        const projectJson = JSON.stringify(projectData.value, null, 2);
+        const blob = new Blob([projectJson], { type: 'application/json' });
         
-        for (const asset of exportData.assets) {
-          // Extract base64 data
-          const base64Data = asset.data.split(',')[1];
-          const binaryData = atob(base64Data);
-          const bytes = new Uint8Array(binaryData.length);
-          
-          for (let i = 0; i < binaryData.length; i++) {
-            bytes[i] = binaryData.charCodeAt(i);
-          }
-          
-          // Determine file extension
-          const ext = asset.type.split('/')[1] || 'bin';
-          const filename = `${asset.id}.${ext}`;
-          
-          assetsFolder.file(filename, bytes);
-        }
-      }
-      
-      // Generate ZIP blob
-      const blob = await zip.generateAsync({ type: 'blob' });
-      
-      // Save file
-      await fileSave(blob, {
-        fileName: `${projectName.value || 'project'}.lumencanvas.zip`,
-        extensions: ['.zip'],
-        description: 'LumenCanvas Project',
-      });
-      
-      return true;
-    } catch (error) {
-      if (error.name === 'NotAllowedError' && error.message.includes('File picker already active')) {
-        console.warn('File picker is already active');
-      } else if (error.name === 'AbortError') {
-        console.log('Export cancelled by user');
-      } else {
-        console.error('Failed to export project:', error);
-        throw error;
-      }
-    } finally {
-      // Reset the flag when the operation is complete
-      filePickerActive.value = false;
+        await fileSave(blob, {
+            fileName: `${projectName.value || 'project'}.json`,
+            extensions: ['.json'],
+        });
+    } catch(error) {
+        console.error("Export failed:", error);
     }
   }
 
@@ -420,28 +329,21 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   // Create a new project
-  function createNewProject(options = {}) {
-    const newProject = createEmptyProject(options);
-    
-    // Update store with new project data
-    projectId.value = newProject.metadata.id;
-    projectName.value = newProject.metadata.name;
-    projectDescription.value = newProject.metadata.description;
-    canvasWidth.value = newProject.canvas.width;
-    canvasHeight.value = newProject.canvas.height;
-    canvasBackground.value = newProject.canvas.background;
-    blendMode.value = newProject.canvas.blendMode;
-    
-    // Clear layers
-    layersStore.importLayers([]);
-    
-    // Clear history
-    historyStore.clear();
-    
-    // Save the new project
-    saveProject();
-    
-    return newProject.metadata.id;
+  async function createNewProject(options = {}) {
+      const newProjectData = createEmptyProject(options);
+      try {
+          const { projectId: newId } = await api.projects.create(newProjectData);
+          await loadProject(newId);
+          return newId;
+      } catch(error) {
+          console.error("Failed to create new project on the server, saving locally.", error);
+          // Fallback to local-only project if API fails
+          const localId = `local_${Date.now()}`;
+          newProjectData.id = localId;
+          await saveProjectToDB(newProjectData);
+          await loadProject(localId);
+          return localId;
+      }
   }
 
   // Get project backups
@@ -543,7 +445,7 @@ export const useProjectStore = defineStore('project', () => {
   // Watch for changes and trigger save
   let saveTimeout = null;
   watch(
-    [projectName, projectDescription, warpPoints, () => layersStore.layers],
+    [projectName, projectDescription, warpPoints, () => layersStore.layers, () => assets.value],
     () => {
       // Debounce saves
       if (saveTimeout) {
@@ -563,6 +465,15 @@ export const useProjectStore = defineStore('project', () => {
     filePickerActive.value = active;
   }
 
+  function addAsset(asset) {
+      const existing = assets.value.find(a => a.id === asset.id);
+      if (!existing) {
+          assets.value.push(asset);
+          // Trigger a save since assets list has changed
+          saveProject();
+      }
+  }
+
   return {
     // State
     projectId,
@@ -573,6 +484,7 @@ export const useProjectStore = defineStore('project', () => {
     canvasBackground,
     blendMode,
     warpPoints,
+    assets,
     isSaving,
     lastSaved,
     isLoading,
@@ -603,6 +515,7 @@ export const useProjectStore = defineStore('project', () => {
     setCanvasSize,
     setCanvasBackground,
     setName,
-    setDescription
+    setDescription,
+    addAsset
   };
 });

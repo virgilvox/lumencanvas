@@ -8,11 +8,7 @@ export default defineConfig({
     vue({
       template: {
         compilerOptions: { 
-          isCustomElement: (tag) => {
-            const isPixi = isCustomElement(tag);
-            const isVueFinder = tag.startsWith('v-f-');
-            return isPixi || isVueFinder;
-          }
+          isCustomElement
         },
         transformAssetUrls,
       },
@@ -23,17 +19,4 @@ export default defineConfig({
       // Add any aliases if needed
     },
   },
-  optimizeDeps: {
-    include: ['vuefinder/dist/vuefinder']
-  },
-  server: {
-    proxy: {
-      // Proxy API requests to the Netlify Functions dev server
-      '^/api/vf(?:/.*|)$': {
-        target: 'http://localhost:8888',
-        changeOrigin: true,
-        rewrite: p => p.replace(/^\/api\/vf/, '/.netlify/functions/vf')
-      }
-    }
-  }
 })

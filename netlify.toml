@@ -3,12 +3,46 @@
   functions = "netlify/functions"
   publish = "dist"
 
-# API proxy rule for VueFinder
+# API proxy rule for Assets
 [[redirects]]
-  from = "/api/vf"
-  to = "/.netlify/functions/vf"
+  from = "/api/assets/create-upload-url"
+  to = "/.netlify/functions/assets-create-upload-url"
   status = 200
   force = true
+
+# API proxy rules for Projects
+[[redirects]]
+  from = "/api/projects/list"
+  to = "/.netlify/functions/projects-list"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/projects/create"
+  to = "/.netlify/functions/projects-create"
+  status = 201
+  force = true
+  
+[[redirects]]
+  from = "/api/projects/:id"
+  to = "/.netlify/functions/projects-read?id=:id"
+  status = 200
+  force = true
+  conditions = { "method" = ["GET"] }
+
+[[redirects]]
+  from = "/api/projects/:id"
+  to = "/.netlify/functions/projects-update?id=:id"
+  status = 200
+  force = true
+  conditions = { "method" = ["PUT", "PATCH"] }
+
+[[redirects]]
+  from = "/api/projects/:id"
+  to = "/.netlify/functions/projects-delete?id=:id"
+  status = 200
+  force = true
+  conditions = { "method" = ["DELETE"] }
 
 # SPA fallback rule
 [[redirects]]
@@ -21,6 +55,10 @@
 
 [functions]
   node_bundler = "esbuild"
+  directory = "netlify/functions"
+  
+[functions."*"]
+  node_compat = "v18"
 
 # Image CDN configuration
 [images]

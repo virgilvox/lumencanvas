@@ -25,14 +25,23 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import EditorLayout from '../layouts/EditorLayout.vue';
-import TopBar from '../components/TopBar.vue';
 import Sidebar from '../components/Sidebar.vue';
 import CanvasStage from '../components/CanvasStage.vue';
 import PropertiesPanel from '../components/PropertiesPanel.vue';
 import CodeEditor from '../components/CodeEditor.vue';
+import TopBar from '../components/TopBar.vue';
 import { useLayersStore } from '../store/layers';
+import { useProjectStore } from '../store/project';
+
+const props = defineProps({
+  id: {
+    type: String,
+    required: true,
+  },
+});
 
 const layersStore = useLayersStore();
+const projectStore = useProjectStore();
 
 // Code editor state
 const showCodeEditor = ref(false);
@@ -90,6 +99,7 @@ function handleOpenCodeEditor(event) {
 }
 
 onMounted(() => {
+  projectStore.loadProject(props.id);
   window.addEventListener('open-code-editor', handleOpenCodeEditor);
 });
 

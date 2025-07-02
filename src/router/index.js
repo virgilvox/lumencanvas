@@ -1,12 +1,33 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { useAuth } from '@clerk/vue';
+
+import LandingPage from '../pages/LandingPage.vue';
+import DashboardPage from '../pages/DashboardPage.vue';
 import EditorPage from '../pages/EditorPage.vue';
+import SignInPage from '../pages/SignInPage.vue';
+import SignUpPage from '../pages/SignUpPage.vue';
 import ProjectorPage from '../pages/ProjectorPage.vue';
 
 const routes = [
   {
     path: '/',
+    name: 'landing',
+    component: LandingPage,
+  },
+  { path: '/sign-in', name: 'sign-in', component: SignInPage },
+  { path: '/sign-up', name: 'sign-up', component: SignUpPage },
+  {
+    path: '/dashboard',
+    name: 'dashboard',
+    component: DashboardPage,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/editor/:id',
     name: 'editor',
-    component: EditorPage
+    component: EditorPage,
+    props: true,
+    meta: { requiresAuth: true },
   },
   {
     path: '/projector/:id',
@@ -18,7 +39,17 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+});
+
+router.beforeEach((to, from, next) => {
+  if (to.meta.requiresAuth) {
+    const { isSignedIn } = useAuth();
+    if (!isSignedIn.value) {
+      return next({ name: 'sign-in', query: { redirect_url: to.fullPath } });
+    }
+  }
+  next();
 });
 
 export default router; 

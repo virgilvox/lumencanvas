@@ -5,99 +5,67 @@
         <div class="modal-container" @click.stop>
           <div class="modal-header">
             <h3>{{ title }}</h3>
-            <button @click="close" class="close-btn">
+            <button @click="close" class="close-btn" title="Close">
               <X :size="16" />
             </button>
           </div>
           
           <div class="modal-content">
-            <div class="assets-browser">
-              <!-- Tabs for navigation -->
-              <div class="assets-tabs">
-                <button 
-                  class="assets-tab"
-                  :class="{ active: assetsTab === 'project' }"
-                  @click="assetsTab = 'project'"
-                >
-                  Project Assets
-                </button>
-                <button 
-                  class="assets-tab"
-                  :class="{ active: assetsTab === 'upload' }"
-                  @click="assetsTab = 'upload'"
-                >
-                  Upload New
-                </button>
+            <div class="assets-tabs">
+              <button 
+                class="assets-tab" 
+                :class="{ active: assetsTab === 'project' }" 
+                @click="assetsTab = 'project'"
+              >
+                Project Assets
+              </button>
+              <button 
+                class="assets-tab" 
+                :class="{ active: assetsTab === 'upload' }" 
+                @click="assetsTab = 'upload'"
+              >
+                Upload New
+              </button>
+            </div>
+
+            <!-- Project Assets Tab -->
+            <div v-if="assetsTab === 'project'" class="assets-list">
+              <div v-if="loading" class="loading-state">Loading...</div>
+              <div v-else-if="filteredAssets.length === 0" class="empty-state">
+                No {{ assetTypeFilter }} assets found.
               </div>
-              
-              <!-- Project Assets Tab -->
-              <div v-if="assetsTab === 'project'" class="assets-list">
-                <div v-if="loading" class="loading-state">
-                  Loading assets...
+              <div 
+                v-else
+                v-for="asset in filteredAssets" 
+                :key="asset.id" 
+                class="asset-item"
+                :class="{ selected: selectedAssetId === asset.id }"
+                @click="selectAsset(asset)"
+              >
+                <div class="asset-preview">
+                  <img v-if="asset.type === 'image'" :src="asset.url" alt="Asset preview" />
+                  <div v-else class="generic-preview">...</div>
                 </div>
-                
-                <div v-else-if="projectAssets.length === 0" class="empty-state">
-                  No assets yet. Upload some files first.
-                </div>
-                
-                <div 
-                  v-else
-                  v-for="asset in filteredAssets" 
-                  :key="asset.id" 
-                  class="asset-item"
-                  :class="{ selected: selectedAssetId === asset.id }"
-                  @click="selectAsset(asset)"
-                >
-                  <div class="asset-preview">
-                    <img v-if="asset.type === 'image'" :src="asset.url || asset.data" alt="Asset preview" />
-                    <div v-else-if="asset.type === 'video'" class="video-preview">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                      </svg>
-                    </div>
-                    <div v-else class="generic-preview">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                        <polyline points="10 9 9 9 8 9"></polyline>
-                      </svg>
-                    </div>
-                  </div>
-                  
-                  <div class="asset-info">
-                    <div class="asset-name">{{ asset.name }}</div>
-                    <div class="asset-type">{{ asset.type }}</div>
-                  </div>
-                </div>
+                <div class="asset-info">{{ asset.name }}</div>
               </div>
-              
-              <!-- Upload Tab -->
-              <div v-if="assetsTab === 'upload'" class="upload-area">
-                <!-- VueFinder Component -->
-                <div v-if="assetsTab === 'upload'" class="vuefinder-container">
-                  <VueFinder 
-                    :request="requestCfg"
-                    @select="handleVueFinderSelect"
-                    @uploaded="handleVueFinderUploaded"
-                    @error="handleVueFinderError"
-                  />
+            </div>
+
+            <!-- Upload Tab -->
+            <div v-if="assetsTab === 'upload'" class="upload-area">
+              <label class="upload-zone">
+                <div class="upload-content">
+                  <Upload :size="32" />
+                  <p>Drop files here or click to upload</p>
                 </div>
-                
-                <!-- Fallback upload (shown only if VueFinder fails to load) -->
-                <div v-if="vuefinderError" class="upload-zone">
-                  <div class="upload-content">
-                    <Upload :size="32" />
-                    <p>VueFinder failed to load - using local upload</p>
-                  </div>
-                  <input 
-                    type="file" 
-                    :accept="acceptedFileTypes" 
-                    @change="handleFileUpload"
-                    class="file-input"
-                  />
-                </div>
+                <input 
+                  type="file" 
+                  :accept="acceptedFileTypes" 
+                  @change="handleFileUpload"
+                  class="file-input"
+                />
+              </label>
+              <div v-if="uploading" class="upload-progress">
+                Uploading...
               </div>
             </div>
           </div>
@@ -107,7 +75,7 @@
             <button 
               @click="useSelectedAsset" 
               class="select-btn"
-              :disabled="!selectedAssetId"
+              :disabled="!selectedAssetId || assetsTab !== 'project'"
             >
               Select
             </button>
@@ -119,78 +87,93 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { X, Upload } from 'lucide-vue-next';
-import { useStorageService } from '../services/storage';
-import axios from 'axios'
+import api from '../services/api';
+import { useProjectStore } from '../store/project';
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  },
-  title: {
-    type: String,
-    default: 'Select Asset'
-  },
-  assetTypeFilter: {
-    type: String,
-    default: null
-  }
+  modelValue: { type: Boolean, default: false },
+  title: { type: String, default: 'Select Asset' },
+  assetTypeFilter: { type: String, default: null } // 'image', 'video', etc.
 });
 
 const emit = defineEmits(['update:modelValue', 'select-asset', 'toast']);
 
-// State
+const projectStore = useProjectStore();
 const assetsTab = ref('project');
 const projectAssets = ref([]);
 const selectedAssetId = ref(null);
 const loading = ref(false);
-const vuefinderError = ref(false);
+const uploading = ref(false);
 
-// Services
-const { saveAsset, getProjectAssets, getAllAssets } = useStorageService();
+const acceptedFileTypes = computed(() => {
+  if (props.assetTypeFilter === 'image') return 'image/*';
+  if (props.assetTypeFilter === 'video') return 'video/*';
+  return '*/*';
+});
 
-const requestCfg = {
-  baseUrl: '/api/vf',      // must exist
-  headers: { /* optional */ },
-  params : { adapter: 'netlify' },   // if you still want ?adapter=
-  // use transformRequest if you need to force POST
-  transformRequest: (cfg) => {
-    // Vuefinder sets cfg.method = 'get' for list/index
-    if (cfg.method === 'get') {
-      cfg.method = 'post'
-      cfg.data   = { action: cfg.params.q, ...cfg.params }
-      delete cfg.params
-    }
-    return cfg
-  }
-}
-
-
-// Computed
 const filteredAssets = computed(() => {
   if (!props.assetTypeFilter) return projectAssets.value;
   return projectAssets.value.filter(asset => asset.type === props.assetTypeFilter);
 });
 
-const acceptedFileTypes = computed(() => {
-  if (!props.assetTypeFilter) return '';
-  
-  if (props.assetTypeFilter === 'image') {
-    return 'image/*';
+async function loadProjectAssets() {
+  if (!projectStore.projectId) return;
+  loading.value = true;
+  try {
+    // This assumes project data in the store contains the assets list
+    projectAssets.value = projectStore.projectData.assets || [];
+  } catch (error) {
+    console.error('Failed to load project assets:', error);
+    emit('toast', 'Failed to load assets');
+  } finally {
+    loading.value = false;
   }
-  
-  if (props.assetTypeFilter === 'video') {
-    return 'video/*';
-  }
-  
-  return '';
-});
+}
 
-// Methods
-function close() {
-  emit('update:modelValue', false);
+async function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file || !projectStore.projectId) return;
+
+  uploading.value = true;
+  try {
+    const { uploadUrl, publicUrl, assetId, key } = await api.assets.getUploadUrl(
+      file.name,
+      file.type,
+      projectStore.projectId
+    );
+
+    await fetch(uploadUrl, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': file.type,
+      },
+    });
+
+    const newAsset = {
+      id: assetId,
+      name: file.name,
+      type: file.type.split('/')[0],
+      url: publicUrl,
+      key: key
+    };
+    
+    // Add asset to project store
+    projectStore.addAsset(newAsset);
+    
+    emit('toast', `File uploaded: ${file.name}`);
+    await loadProjectAssets(); // Refresh asset list
+    assetsTab.value = 'project'; // Switch to project assets
+    selectAsset(newAsset); // Auto-select the new asset
+
+  } catch (error) {
+    console.error('Upload failed:', error);
+    emit('toast', `Upload failed: ${error.message}`);
+  } finally {
+    uploading.value = false;
+  }
 }
 
 function selectAsset(asset) {
@@ -198,126 +181,25 @@ function selectAsset(asset) {
 }
 
 function useSelectedAsset() {
-  if (!selectedAssetId.value) {
-    close();
-    return;
-  }
-  
   const asset = projectAssets.value.find(a => a.id === selectedAssetId.value);
-  if (!asset) {
+  if (asset) {
+    emit('select-asset', asset);
     close();
-    return;
-  }
-  
-  emit('select-asset', asset);
-  close();
-  showToastMessage(`Asset selected: ${asset.name}`);
-}
-
-async function loadProjectAssets() {
-  loading.value = true;
-  try {
-    // For now, we'll get assets for the current project
-    // In a real implementation, we would get the current project ID
-    const projectId = 'current';
-    const assets = await getProjectAssets(projectId);
-    
-    if (assets && Array.isArray(assets)) {
-      projectAssets.value = assets;
-    } else {
-      projectAssets.value = [];
-    }
-  } catch (error) {
-    console.error('Failed to load assets:', error);
-    showToastMessage('Failed to load assets');
-    projectAssets.value = [];
-  } finally {
-    loading.value = false;
   }
 }
 
-// VueFinder event handlers
-function handleVueFinderSelect(files) {
-  console.log('VueFinder select event:', files);
-  // Handle file selection if needed
+function close() {
+  emit('update:modelValue', false);
 }
 
-function handleVueFinderUploaded(response) {
-  console.log('VueFinder uploaded event:', response);
-  showToastMessage('File uploaded successfully');
-  // Reload project assets to show new uploads
-  loadProjectAssets();
-}
-
-function handleVueFinderError(error) {
-  console.error('VueFinder error:', error);
-  vuefinderError.value = true;
-  showToastMessage(`Error: ${error.message || error}`, 'error');
-}
-
-// Handle file upload
-async function handleFileUpload(event) {
-  const files = event.target.files;
-  if (!files || files.length === 0) return;
-  
-  try {
-    for (const file of files) {
-      const fileType = file.type.split('/')[0]; // 'image', 'video', etc.
-      
-      // Create a URL for the file
-      const url = URL.createObjectURL(file);
-      
-      // Create an asset object
-      const asset = {
-        id: `asset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: file.name,
-        type: fileType,
-        url,
-        file,
-        projectId: 'current' // This would be the actual project ID in a real implementation
-      };
-      
-      // Add to assets list
-      projectAssets.value.push(asset);
-      
-      // Save to storage
-      await saveAsset(asset);
-    }
-    
-    showToastMessage('Files uploaded successfully');
-    
-    // Switch to project tab to show the new asset
+watch(() => props.modelValue, (isOpen) => {
+  if (isOpen) {
     assetsTab.value = 'project';
-  } catch (error) {
-    console.error('Failed to upload files:', error);
-    showToastMessage('Failed to upload files');
+    selectedAssetId.value = null;
+    loadProjectAssets();
   }
-  
-  // Reset the file input
-  event.target.value = '';
-}
-
-function getFileType(filename) {
-  const extension = filename.split('.').pop().toLowerCase();
-  
-  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
-  const videoExts = ['mp4', 'webm', 'ogg', 'mov'];
-  
-  if (imageExts.includes(extension)) return 'image';
-  if (videoExts.includes(extension)) return 'video';
-  
-  return 'other';
-}
-
-// Show a toast message
-function showToastMessage(message) {
-  emit('toast', message);
-}
-
-// Load assets on component mount
-onMounted(() => {
-  loadProjectAssets();
 });
+
 </script>
 
 <style scoped>
@@ -468,6 +350,7 @@ onMounted(() => {
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 12px;
   padding: 8px;
+  min-height: 300px;
 }
 
 .asset-item {
@@ -592,14 +475,10 @@ onMounted(() => {
   color: #888;
 }
 
-/* VueFinder container */
-.vuefinder-container {
-  height: 450px;
-  border: 1px solid #333;
-  background-color: #1a1a1a;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-top: 10px;
+.upload-progress {
+  margin-top: 16px;
+  text-align: center;
+  color: #12B0FF;
 }
 
 /* Transitions */

@@ -18,10 +18,10 @@
     "test:manual-upload": "node test-manual-upload.js"
   },
   "dependencies": {
-    "@clerk/backend": "^2.1.0",
-    "@clerk/vue": "^1.8.8",
+    "@aws-sdk/client-s3": "^3.840.0",
+    "@clerk/backend": "^2.3.1",
+    "@clerk/vue": "^1.8.11",
     "@guolao/vue-monaco-editor": "^1.5.5",
-    "@netlify/blobs": "^10.0.1",
     "axios": "^1.10.0",
     "browser-fs-access": "^0.38.0",
     "busboy": "^1.6.0",
@@ -38,7 +38,6 @@
     "vue": "^3.5.13",
     "vue-router": "^4.5.1",
     "vue3-pixi": "^0.9.6",
-    "vuefinder": "^2.7.1",
     "y-websocket": "^3.0.0",
     "yjs": "^13.6.27"
   },
@@ -46,5 +45,8 @@
     "@vitejs/plugin-vue": "^5.2.3",
     "netlify-cli": "^17.38.1",
     "vite": "^6.3.5"
+  },
+  "netlify": {
+    "functions": "netlify/functions"
   }
 }
