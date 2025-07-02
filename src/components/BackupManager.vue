@@ -141,10 +141,10 @@ onMounted(() => {
 });
 
 // Load backups
-function loadBackups() {
+async function loadBackups() {
   if (!projectStore.projectId) return;
   
-  backups.value = projectStore.getProjectBackups();
+  backups.value = await localBackup.getBackups(projectStore.projectId);
 }
 
 // Format date
@@ -171,39 +171,8 @@ function formatSize(bytes) {
 }
 
 // Calculate storage usage
-function calculateStorageUsage() {
-  try {
-    if (!localBackup.isLocalStorageAvailable()) {
-      storageInfo.value = {
-        available: false,
-        used: 0,
-        total: 0,
-        percentUsed: 0
-      };
-      return;
-    }
-    
-    const used = localBackup.getBackupSize();
-    
-    // Estimate total storage (most browsers allow ~5MB)
-    const total = 5 * 1024 * 1024; // 5MB
-    const percentUsed = (used / total) * 100;
-    
-    storageInfo.value = {
-      available: true,
-      used,
-      total,
-      percentUsed
-    };
-  } catch (error) {
-    console.error('Failed to calculate storage usage:', error);
-    storageInfo.value = {
-      available: false,
-      used: 0,
-      total: 0,
-      percentUsed: 0
-    };
-  }
+async function calculateStorageUsage() {
+  storageInfo.value = await localBackup.getStorageInfo();
 }
 
 // Create backup
@@ -212,12 +181,12 @@ async function createBackup() {
   
   isCreating.value = true;
   try {
-    const success = localBackup.createBackup(projectStore.projectData);
+    const success = await localBackup.createBackup(projectStore.projectData);
     
     if (success) {
       showToastMessage('Backup created successfully', 'success');
-      loadBackups();
-      calculateStorageUsage();
+      await loadBackups();
+      await calculateStorageUsage();
     } else {
       showToastMessage('Failed to create backup', 'error');
     }
@@ -239,7 +208,15 @@ async function restoreBackup(timestamp) {
   
   isRestoring.value = true;
   try {
-    const success = await projectStore.restoreFromBackup(timestamp);
+    const backupData = await localBackup.restoreBackup(timestamp);
+    if (!backupData) {
+      showToastMessage('Failed to load backup data', 'error');
+      isRestoring.value = false;
+      return;
+    }
+
+    // Pass the restored data to the project store
+    const success = await projectStore.restoreFromBackup(backupData);
     
     if (success) {
       showToastMessage('Backup restored successfully', 'success');
@@ -255,7 +232,7 @@ async function restoreBackup(timestamp) {
 }
 
 // Delete backup
-function deleteBackup(timestamp) {
+async function deleteBackup(timestamp) {
   if (!projectStore.projectId || !timestamp) return;
   
   if (!confirm('Are you sure you want to delete this backup?')) {
@@ -263,12 +240,12 @@ function deleteBackup(timestamp) {
   }
   
   try {
-    const success = localBackup.deleteBackup(projectStore.projectId, timestamp);
+    const success = await localBackup.deleteBackup(timestamp);
     
     if (success) {
       showToastMessage('Backup deleted successfully', 'success');
-      loadBackups();
-      calculateStorageUsage();
+      await loadBackups();
+      await calculateStorageUsage();
     } else {
       showToastMessage('Failed to delete backup', 'error');
     }
@@ -279,7 +256,7 @@ function deleteBackup(timestamp) {
 }
 
 // Delete all backups
-function deleteAllBackups() {
+async function deleteAllBackups() {
   if (!projectStore.projectId) return;
   
   if (!confirm('Are you sure you want to delete all backups? This cannot be undone.')) {
@@ -287,12 +264,12 @@ function deleteAllBackups() {
   }
   
   try {
-    const success = localBackup.deleteAllBackups(projectStore.projectId);
+    const success = await localBackup.deleteAllBackups(projectStore.projectId);
     
     if (success) {
       showToastMessage('All backups deleted successfully', 'success');
-      loadBackups();
-      calculateStorageUsage();
+      await loadBackups();
+      await calculateStorageUsage();
     } else {
       showToastMessage('Failed to delete backups', 'error');
     }

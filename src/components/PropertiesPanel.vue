@@ -37,6 +37,7 @@
           <input 
             type="text" 
             v-model="selectedLayer.name" 
+            @focus="captureOriginalState(['name'])"
             @change="updateName" 
           />
         </div>
@@ -45,22 +46,22 @@
         <div class="property">
           <label>Position</label>
           <div class="input-group">
-            <input type="number" v-model="posX" placeholder="X" @change="updatePosition" @input="updatePreviewPosition"/>
-            <input type="number" v-model="posY" placeholder="Y" @change="updatePosition" @input="updatePreviewPosition"/>
+            <input type="number" v-model="posX" placeholder="X" @focus="captureOriginalState(['x', 'y'])" @change="updatePosition"/>
+            <input type="number" v-model="posY" placeholder="Y" @focus="captureOriginalState(['x', 'y'])" @change="updatePosition"/>
           </div>
         </div>
 
         <div class="property">
           <label>Scale</label>
           <div class="input-group">
-            <input type="number" v-model="scaleX" placeholder="X" step="0.1" @change="updateScale" @input="updatePreviewScale"/>
-            <input type="number" v-model="scaleY" placeholder="Y" step="0.1" @change="updateScale" @input="updatePreviewScale"/>
+            <input type="number" v-model="scaleX" placeholder="X" step="0.1" @focus="captureOriginalState(['scale'])" @change="updateScale"/>
+            <input type="number" v-model="scaleY" placeholder="Y" step="0.1" @focus="captureOriginalState(['scale'])" @change="updateScale"/>
           </div>
         </div>
 
         <div class="property">
           <label>Rotation</label>
-          <input type="number" v-model="rotation" @change="updateRotation" @input="updatePreviewRotation"/>
+          <input type="number" v-model="rotation" @focus="captureOriginalState(['rotation'])" @change="updateRotation"/>
         </div>
 
         <!-- Appearance properties -->
@@ -72,15 +73,15 @@
             max="1" 
             step="0.01" 
             v-model="opacity" 
+            @focus="captureOriginalState(['opacity'])"
             @change="updateOpacity"
-            @input="updatePreviewOpacity"
           />
           <span>{{ Math.round(opacity * 100) }}%</span>
         </div>
 
         <div class="property">
           <label>Blend Mode</label>
-          <select v-model="blendMode" @change="updateBlendMode(blendMode)">
+          <select v-model="blendMode" @focus="captureOriginalState(['blendMode'])" @change="updateBlendMode(blendMode)">
             <option value="normal">Normal</option>
             <option value="add">Add</option>
             <option value="multiply">Multiply</option>
@@ -197,6 +198,7 @@ const opacity = ref(1);
 const blendMode = ref('normal');
 const visible = ref(true);
 const isCollapsed = ref(false);
+const originalStateForUndo = ref({});
 
 // Add toast notification state
 const showToast = ref(false);
@@ -209,6 +211,19 @@ const assetTypeFilter = ref(null);
 // Toggle panel collapse
 function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value;
+}
+
+function captureOriginalState(properties) {
+  if (!selectedLayer.value) return;
+  
+  properties.forEach(prop => {
+    // A simple deep copy for objects like 'scale'
+    if (typeof selectedLayer.value[prop] === 'object' && selectedLayer.value[prop] !== null) {
+      originalStateForUndo.value[prop] = JSON.parse(JSON.stringify(selectedLayer.value[prop]));
+    } else {
+      originalStateForUndo.value[prop] = selectedLayer.value[prop];
+    }
+  });
 }
 
 // Update input values when selected layer changes
@@ -250,67 +265,67 @@ watch(() => [
 
 // Handle position change
 function updatePosition() {
-  if (!selectedLayer.value) return;
-  
-  const layer = selectedLayer.value;
-  const originalState = { x: layer.x, y: layer.y };
-  const updates = { x: parseFloat(posX.value), y: parseFloat(posY.value) };
-  
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
+  if (!selectedLayer.value || originalStateForUndo.value.x === undefined) return;
+  const command = commandFactory.updateLayer(
+    selectedLayer.value.id,
+    { x: parseFloat(posX.value), y: parseFloat(posY.value) },
+    { x: originalStateForUndo.value.x, y: originalStateForUndo.value.y }
   );
+  command.execute();
+  historyStore.pushCommand(command);
+  originalStateForUndo.value = {};
 }
 
 // Handle scale change
 function updateScale() {
-  if (!selectedLayer.value) return;
-  
-  const layer = selectedLayer.value;
-  const originalState = { scale: { x: layer.scale?.x || 1, y: layer.scale?.y || 1 } };
-  const updates = { scale: { x: parseFloat(scaleX.value), y: parseFloat(scaleY.value) } };
-  
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
+  if (!selectedLayer.value || !originalStateForUndo.value.scale) return;
+  const command = commandFactory.updateLayer(
+    selectedLayer.value.id,
+    { scale: { x: parseFloat(scaleX.value), y: parseFloat(scaleY.value) } },
+    { scale: originalStateForUndo.value.scale }
   );
+  command.execute();
+  historyStore.pushCommand(command);
+  originalStateForUndo.value = {};
 }
 
 // Handle rotation change
 function updateRotation() {
-  if (!selectedLayer.value) return;
-  
-  const layer = selectedLayer.value;
-  const originalState = { rotation: layer.rotation || 0 };
-  const updates = { rotation: parseFloat(rotation.value) };
-  
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
+  if (!selectedLayer.value || originalStateForUndo.value.rotation === undefined) return;
+  const command = commandFactory.updateLayer(
+    selectedLayer.value.id,
+    { rotation: parseFloat(rotation.value) },
+    { rotation: originalStateForUndo.value.rotation }
   );
+  command.execute();
+  historyStore.pushCommand(command);
+  originalStateForUndo.value = {};
 }
 
 // Handle opacity change
 function updateOpacity() {
-  if (!selectedLayer.value) return;
-  
-  const layer = selectedLayer.value;
-  const originalState = { opacity: layer.opacity };
-  const updates = { opacity: parseFloat(opacity.value) };
-  
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
+  if (!selectedLayer.value || originalStateForUndo.value.opacity === undefined) return;
+  const command = commandFactory.updateLayer(
+    selectedLayer.value.id,
+    { opacity: parseFloat(opacity.value) },
+    { opacity: originalStateForUndo.value.opacity }
   );
+  command.execute();
+  historyStore.pushCommand(command);
+  originalStateForUndo.value = {};
 }
 
 // Handle blend mode change
 function updateBlendMode(mode) {
-  if (!selectedLayer.value) return;
-  
-  const layer = selectedLayer.value;
-  const originalState = { blendMode: layer.blendMode };
-  const updates = { blendMode: mode };
-  
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
+  if (!selectedLayer.value || !originalStateForUndo.value.blendMode) return;
+   const command = commandFactory.updateLayer(
+    selectedLayer.value.id,
+    { blendMode: mode },
+    { blendMode: originalStateForUndo.value.blendMode }
   );
+  command.execute();
+  historyStore.pushCommand(command);
+  originalStateForUndo.value = {};
 }
 
 // Handle visibility toggle
@@ -349,9 +364,9 @@ function handleAssetSelected(asset) {
   const originalState = { content: { ...layer.content } };
   const updates = { content: { ...layer.content, src: asset.url || asset.data } };
   
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
-  );
+  const command = commandFactory.updateLayer(layer.id, updates, originalState);
+  command.execute();
+  historyStore.pushCommand(command);
   
   showToastMessage(`Asset applied to layer`);
 }
@@ -364,9 +379,9 @@ function updateUrl(url) {
   const originalState = { content: { ...layer.content } };
   const updates = { content: { ...layer.content, url } };
   
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
-  );
+  const command = commandFactory.updateLayer(layer.id, updates, originalState);
+  command.execute();
+  historyStore.pushCommand(command);
 }
 
 // Get the preview image source for the selected layer
@@ -391,56 +406,18 @@ const hasPreview = computed(() => {
   return layer && (layer.type === 'image' || layer.type === 'video') && layer.content?.src;
 });
 
-// Preview functions for immediate UI update
-function updatePreviewPosition() {
-  if (!selectedLayer.value) return;
-  
-  // Update the UI immediately for responsive feel
-  if (selectedLayer.value) {
-    selectedLayer.value.x = parseFloat(posX.value) || 0;
-    selectedLayer.value.y = parseFloat(posY.value) || 0;
-  }
-}
-
-function updatePreviewScale() {
-  if (!selectedLayer.value) return;
-  
-  // Update the UI immediately for responsive feel
-  if (selectedLayer.value) {
-    if (!selectedLayer.value.scale) selectedLayer.value.scale = { x: 1, y: 1 };
-    selectedLayer.value.scale.x = parseFloat(scaleX.value) || 1;
-    selectedLayer.value.scale.y = parseFloat(scaleY.value) || 1;
-  }
-}
-
-function updatePreviewRotation() {
-  if (!selectedLayer.value) return;
-  
-  // Update the UI immediately for responsive feel
-  if (selectedLayer.value) {
-    selectedLayer.value.rotation = parseFloat(rotation.value) || 0;
-  }
-}
-
-function updatePreviewOpacity() {
-  if (!selectedLayer.value) return;
-  
-  // Update the UI immediately for responsive feel
-  if (selectedLayer.value) {
-    selectedLayer.value.opacity = parseFloat(opacity.value);
-  }
-}
-
 // Update layer name
 function updateName() {
-  if (!selectedLayer.value) return;
+  if (!selectedLayer.value || originalStateForUndo.value.name === undefined) return;
   
-  const originalState = { name: selectedLayer.value.name };
-  const updates = { name: selectedLayer.value.name };
-  
-  historyStore.pushCommand(
-    commandFactory.updateLayer(selectedLayer.value.id, updates, originalState)
+  const command = commandFactory.updateLayer(
+    selectedLayer.value.id,
+    { name: selectedLayer.value.name },
+    { name: originalStateForUndo.value.name }
   );
+  command.execute();
+  historyStore.pushCommand(command);
+  originalStateForUndo.value = {};
 }
 
 // Open code editor (emits event to parent)
@@ -448,6 +425,22 @@ function openCodeEditor() {
   if (!selectedLayer.value) return;
   
   emit('requestEdit', selectedLayer.value);
+}
+
+function updateProperties(props) {
+  if (selectedLayer.value) {
+    updateLayer(selectedLayer.value.id, {
+      properties: { ...selectedLayer.value.properties, ...props }
+    });
+  }
+}
+
+function updateContent(content) {
+  if (selectedLayer.value) {
+    updateLayer(selectedLayer.value.id, {
+      content: { ...selectedLayer.value.content, ...content }
+    });
+  }
 }
 
 // Get the layer type display name

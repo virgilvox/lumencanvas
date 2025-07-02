@@ -383,6 +383,7 @@ function onPointerUp(event) {
       
       // Record the command for undo/redo
       const command = commandFactory.updateLayer(layerId, finalState, originalState);
+      command.execute();
       historyStore.pushCommand(command);
     }
     

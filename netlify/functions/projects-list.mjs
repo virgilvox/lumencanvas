@@ -59,7 +59,7 @@ export const handler = async (event) => {
         return JSON.parse(projectDataString);
       } catch (error) {
         if (error.name !== 'NoSuchKey') {
-          console.error(`Failed to fetch project for prefix ${commonPrefix.Prefix}:`, error);
+          console.error(`Failed to fetch or parse project.json for prefix ${commonPrefix.Prefix}:`, error);
         }
         return null;
       }

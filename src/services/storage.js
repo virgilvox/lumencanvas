@@ -4,6 +4,7 @@ const DB_NAME = 'lumencanvas';
 const DB_VERSION = 2;
 const PROJECT_STORE = 'projects';
 const ASSETS_STORE = 'assets';
+const BACKUP_STORE = 'backups';
 
 // Storage providers
 const STORAGE_PROVIDERS = {
@@ -122,6 +123,14 @@ async function initDB() {
           autoIncrement: false 
         });
         assetStore.createIndex('projectId', 'projectId');
+      }
+
+      // Create backups store
+      if (!db.objectStoreNames.contains(BACKUP_STORE)) {
+        const backupStore = db.createObjectStore(BACKUP_STORE, { 
+          keyPath: 'timestamp'
+        });
+        backupStore.createIndex('projectId', 'projectId');
       }
     }
   });
