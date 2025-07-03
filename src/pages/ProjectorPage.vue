@@ -3,22 +3,36 @@
     <div 
       class="projector-container"
       ref="projectorContainerRef"
+      :style="containerStyle"
     >
-      <Application
-        ref="appRef"
-        :width="canvasWidth"
-        :height="canvasHeight"
-        :background="canvasBackground"
-        :antialias="true"
-      >
-        <container>
-          <LayerRenderer
-            v-for="layer in layers"
+      <div class="projector-wrapper" :style="wrapperStyle">
+        <Application
+          ref="appRef"
+          :width="canvasWidth"
+          :height="canvasHeight"
+          :background="canvasBackground"
+          :antialias="true"
+        >
+          <container>
+            <LayerRenderer
+              v-for="layer in layers"
+              :key="layer.id"
+              :layer="layer"
+            />
+          </container>
+        </Application>
+        
+        <!-- Warped iframes are rendered here in a separate overlay -->
+        <div class="iframe-overlay">
+          <WarpedIframe
+            v-for="layer in urlLayers"
             :key="layer.id"
             :layer="layer"
+            :canvas-width="canvasWidth"
+            :canvas-height="canvasHeight"
           />
-        </container>
-      </Application>
+        </div>
+      </div>
     </div>
 
     <button v-if="!isFullscreen" @click.stop="enterFullscreen" class="fullscreen-button">
@@ -28,11 +42,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useSync } from '../composables/useSync';
 import { Application } from 'vue3-pixi';
 import LayerRenderer from '../components/layers/LayerRenderer.vue';
+import WarpedIframe from '../components/layers/WarpedIframe.vue';
+import { useLayersStore } from '../store/layers';
 
 const route = useRoute();
 const projectId = route.params.id;
@@ -44,8 +60,14 @@ const canvasBackground = ref(0x000000);
 
 const projectorPageRef = ref(null);
 const isFullscreen = ref(false);
+const layersStore = useLayersStore();
+const scale = ref(1);
 
 let yjs_instance = null;
+
+const urlLayers = computed(() => {
+  return layers.value.filter(layer => layer.type === layersStore.LayerTypes.URL && layer.visible);
+});
 
 const enterFullscreen = () => {
   if (projectorPageRef.value && !document.fullscreenElement) {
@@ -54,6 +76,22 @@ const enterFullscreen = () => {
     });
   }
 };
+
+const containerStyle = computed(() => ({
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+}));
+
+const wrapperStyle = computed(() => ({
+    position: 'relative',
+    width: `${canvasWidth.value}px`,
+    height: `${canvasHeight.value}px`,
+    transform: `scale(${scale.value})`,
+    transformOrigin: 'center center',
+}));
 
 const handleFullscreenChange = () => {
   isFullscreen.value = !!document.fullscreenElement;
@@ -139,6 +177,11 @@ onUnmounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative;
+}
+
+.projector-wrapper {
+  position: relative;
 }
 
 .fullscreen-button {
@@ -163,5 +206,15 @@ onUnmounted(() => {
 /* Hide button when in fullscreen */
 .projector-page:fullscreen .fullscreen-button {
   display: none;
+}
+
+.iframe-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* Let clicks pass through to the canvas */
+  transform-origin: 0 0;
 }
 </style>

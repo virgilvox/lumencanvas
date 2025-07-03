@@ -5,18 +5,11 @@
     @wheel.prevent="onWheel"
     @mousedown="onCanvasMouseDown"
   >
-    <div class="zoom-controls">
-      <button class="zoom-button" @click="zoomOut" :disabled="zoom <= 0.25">-</button>
-      <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
-      <button class="zoom-button" @click="zoomIn" :disabled="zoom >= 3">+</button>
-      <button class="zoom-button fit" @click="resetZoom">Fit</button>
-    </div>
-    
     <div 
       class="canvas-wrapper"
       :style="{
         transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`,
-        transformOrigin: '50% 50%'
+        transformOrigin: 'top left'
       }"
     >
       <application
@@ -60,12 +53,30 @@
           </container>
         </container>
       </application>
+      
+      <!-- Warped iframes are rendered here in a separate overlay -->
+      <div class="iframe-overlay">
+        <WarpedIframe
+          v-for="layer in urlLayers"
+          :key="layer.id"
+          :layer="layer"
+          :canvas-width="projectStore.canvasWidth"
+          :canvas-height="projectStore.canvasHeight"
+        />
+      </div>
+    </div>
+    
+    <div class="zoom-controls">
+      <button class="zoom-button" @click="zoomOut" :disabled="zoom <= 0.25">-</button>
+      <span class="zoom-level">{{ Math.round(zoom * 100) }}%</span>
+      <button class="zoom-button" @click="zoomIn" :disabled="zoom >= 3">+</button>
+      <button class="zoom-button fit" @click="resetZoom">Fit</button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Application } from 'vue3-pixi';
 import { useLayersStore } from '../store/layers';
@@ -74,6 +85,7 @@ import { useHistoryStore } from '../store/history';
 import { commandFactory } from '../utils/commandFactory';
 import LayerRenderer from './layers/LayerRenderer.vue';
 import WarpHandle from './WarpHandle.vue';
+import WarpedIframe from './layers/WarpedIframe.vue';
 
 const layersStore = useLayersStore();
 const projectStore = useProjectStore();
@@ -89,6 +101,10 @@ const panY = ref(0);
 const isPanning = ref(false);
 const lastPanPosition = ref({ x: 0, y: 0 });
 const selectedLayers = ref([]);
+
+const urlLayers = computed(() => {
+  return layersStore.layers.filter(layer => layer.type === layersStore.LayerTypes.URL && layer.visible);
+});
 
 const onInit = (app) => {
   appRef.value = app;
@@ -310,7 +326,7 @@ const drawSelectionOutline = (graphics) => {
   if (!layer) return;
 
   const points = layer.warp?.points;
-  if (layer.warp?.enabled && points?.length) {
+  if (points?.length === 4) {
     graphics.lineStyle(2, 0x12B0FF, 1);
     graphics.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length; i++) {
@@ -319,7 +335,28 @@ const drawSelectionOutline = (graphics) => {
     graphics.closePath();
   } else {
     graphics.lineStyle(1, 0x12B0FF, 0.8);
-    graphics.drawRect(layer.x - layer.width / 2, layer.y - layer.height / 2, layer.width, layer.height);
+    const { x, y, width, height, scale, rotation = 0 } = layer;
+    const w = width * (scale?.x || 1);
+    const h = height * (scale?.y || 1);
+    
+    const corners = [
+        { x: -w / 2, y: -h / 2 },
+        { x: w / 2, y: -h / 2 },
+        { x: w / 2, y: h / 2 },
+        { x: -w / 2, y: h / 2 }
+    ];
+
+    const transformedCorners = corners.map(p => {
+        const rotatedX = p.x * Math.cos(rotation) - p.y * Math.sin(rotation);
+        const rotatedY = p.x * Math.sin(rotation) + p.y * Math.cos(rotation);
+        return { x: rotatedX + x, y: rotatedY + y };
+    });
+    
+    graphics.moveTo(transformedCorners[0].x, transformedCorners[0].y);
+    graphics.lineTo(transformedCorners[1].x, transformedCorners[1].y);
+    graphics.lineTo(transformedCorners[2].x, transformedCorners[2].y);
+    graphics.lineTo(transformedCorners[3].x, transformedCorners[3].y);
+    graphics.closePath();
   }
 };
 
@@ -390,5 +427,15 @@ const drawSelectionOutline = (graphics) => {
   margin: 0 8px;
   min-width: 40px;
   text-align: center;
+}
+
+.iframe-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* Let clicks pass through to the canvas */
+  transform-origin: 0 0;
 }
 </style>

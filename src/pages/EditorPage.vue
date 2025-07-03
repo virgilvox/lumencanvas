@@ -9,7 +9,7 @@
     <template #main>
       <CanvasStage @request-edit="handleRequestEdit" />
       <PropertiesPanel @request-edit="handleRequestEdit" />
-      
+
       <!-- Code Editor Modal -->
       <CodeEditor
         v-model="showCodeEditor"
@@ -130,3 +130,7 @@ onUnmounted(() => {
   window.removeEventListener('open-code-editor', handleOpenCodeEditor);
 });
 </script>
+
+<style scoped>
+/* No specific styles needed here anymore */
+</style>

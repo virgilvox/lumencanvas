@@ -1,6 +1,6 @@
 <template>
   <mesh
-    v-if="geometry"
+    v-if="geometry && shader"
     :shader="shader"
     :state="state"
     :geometry="geometry"
@@ -14,7 +14,7 @@
 
 <script setup>
 import * as PIXI from 'pixi.js';
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted, watchEffect } from 'vue';
 
 const props = defineProps({
   layer: { type: Object, required: true },
@@ -37,12 +37,46 @@ function getBlendMode(mode) {
   return modes[mode] ?? PIXI.BLEND_MODES.NORMAL;
 }
 
-function buildTexture() {
-  // Implementation of buildTexture function
-}
+watchEffect(async () => {
+  const html = props.layer.content?.html;
+  if (html) {
+    const width = props.layer.width || 200;
+    const height = props.layer.height || 200;
+    
+    // Construct the SVG with foreignObject
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+        <foreignObject width="100%" height="100%">
+          <div xmlns="http://www.w3.org/1999/xhtml" style="width: ${width}px; height: ${height}px; background-color: transparent; color: white; font-family: sans-serif;">
+            ${html}
+          </div>
+        </foreignObject>
+      </svg>
+    `;
+
+    const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
+    try {
+      if (texture.value && texture.value.textureCacheIds) {
+        texture.value.textureCacheIds.forEach(id => {
+          if (id.startsWith('data:image/svg+xml')) {
+            PIXI.Texture.removeFromCache(id);
+            PIXI.BaseTexture.removeFromCache(id);
+          }
+        });
+      }
+      texture.value = await PIXI.Assets.load(dataUrl);
+    } catch (e) {
+      console.error(`Failed to load HTML texture for layer ${props.layer.id}:`, e);
+      texture.value = PIXI.Texture.WHITE;
+    }
+  } else {
+    texture.value = PIXI.Texture.WHITE;
+  }
+});
 
 function buildVertices() {
-  if (props.layer.warp?.points?.length === 4) {
+  if (props.layer.warp?.points && props.layer.warp.points.length === 4) {
     return props.layer.warp.points.flatMap(p => [p.x, p.y]);
   }
   const { x = 0, y = 0, width = 0, height = 0 } = props.layer;
@@ -59,24 +93,24 @@ function getQuadIndices(points) {
   const p = points;
   const d02_sq = Math.pow(p[2].x - p[0].x, 2) + Math.pow(p[2].y - p[0].y, 2);
   const d13_sq = Math.pow(p[3].x - p[1].x, 2) + Math.pow(p[3].y - p[1].y, 2);
-  return d13_sq < d02_sq
-    ? [0, 1, 3, 1, 2, 3]
+  return d13_sq < d02_sq 
+    ? [0, 1, 3, 1, 2, 3] 
     : [0, 1, 2, 0, 2, 3];
 }
 
 function updateGeometry () {
-  const verts = buildVertices()
-  const uvs   = [0,0, 1,0, 1,1, 0,1]
-  const indices = getQuadIndices(props.layer.warp?.points);
+  const verts = buildVertices();
+  const uvs   = [0,0, 1,0, 1,1, 0,1];
+  const indices = getQuadIndices(props.layer.warp?.points || []);
 
   if (!geometry.value) {
     geometry.value = new PIXI.Geometry()
       .addAttribute('aVertexPosition', verts, 2)
-      .addAttribute('aTextureCoord',  uvs,   2)
-      .addIndex(indices)
+      .addAttribute('aTextureCoord', uvs, 2)
+      .addIndex(indices);
   } else {
-    geometry.value.getBuffer('aVertexPosition').update(new Float32Array(verts))
-    geometry.value.getBuffer('aTextureCoord') .update(new Float32Array(uvs))
+    geometry.value.getBuffer('aVertexPosition').update(new Float32Array(verts));
+    geometry.value.getBuffer('aTextureCoord').update(new Float32Array(uvs));
     geometry.value.getIndex().update(new Uint16Array(indices));
   }
 }
@@ -86,9 +120,28 @@ updateGeometry();
 onMounted(() => {
   state.value = new PIXI.State();
   state.value.blend = true;
-  shader.value = new PIXI.MeshMaterial(texture.value);
 });
+
+watch(texture, (newTexture) => {
+  if (newTexture) {
+    shader.value = new PIXI.MeshMaterial(newTexture);
+  }
+}, { immediate: true });
 
 watch(() => props.layer.warp?.points, updateGeometry, { deep: true });
 watch(() => [props.layer.x, props.layer.y, props.layer.width, props.layer.height], updateGeometry);
+
+onUnmounted(() => {
+    if (texture.value && texture.value.textureCacheIds) {
+        texture.value.textureCacheIds.forEach(id => {
+            if (id.startsWith('data:image/svg+xml')) {
+                PIXI.Texture.removeFromCache(id);
+                PIXI.BaseTexture.removeFromCache(id);
+            }
+        });
+    }
+    if (geometry.value) {
+        geometry.value.destroy();
+    }
+});
 </script>
