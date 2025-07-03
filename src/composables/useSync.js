@@ -31,6 +31,7 @@ export function useSync(projectId) {
       yLayers: doc.getArray('layers'),
       yCanvas: doc.getMap('canvas'),
       connectionStatus,
+      refCount: 0,
       disconnect: () => {
         provider.destroy();
         instances.delete(projectId);
@@ -39,10 +40,13 @@ export function useSync(projectId) {
   }
 
   const instance = instances.get(projectId);
+  instance.refCount++;
 
   onUnmounted(() => {
-    // We can manage disconnection more carefully later if needed.
-    // instance.disconnect(); 
+    instance.refCount--;
+    if (instance.refCount === 0) {
+      instance.disconnect(); 
+    }
   });
 
   return instance;
