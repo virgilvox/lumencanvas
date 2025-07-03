@@ -19,7 +19,7 @@
       
       <div v-else-if="error" class="error-state">
         <p>{{ error }}</p>
-        <button @click="loadProjectAssets">Retry</button>
+        <button @click="projectStore.loadProject(projectStore.projectId)">Retry</button>
       </div>
       
       <div v-else-if="assets.length === 0" class="empty-state">
@@ -28,7 +28,7 @@
       
       <div v-else v-for="asset in assets" :key="asset.id" class="asset-item">
         <div class="asset-preview">
-          <img v-if="asset.type === 'image'" :src="`/imgcdn/${asset.url}`" alt="Asset preview" />
+          <img v-if="asset.type === 'image'" :src="asset.url" :alt="asset.name" crossorigin="anonymous" />
           <div v-else-if="asset.type === 'video'" class="video-preview">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -84,61 +84,34 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useStorageService } from '../services/storage';
+import { ref, computed } from 'vue';
 import { useLayersStore } from '../store/layers';
 import { useProjectStore } from '../store/project';
 import AssetsModal from './AssetsModal.vue';
+import { storeToRefs } from 'pinia';
 
 // State
-const assets = ref([]);
 const showFileModal = ref(false);
 const showToast = ref(false);
 const toastMessage = ref('');
-const loading = ref(false);
-const error = ref(null);
 
 // Store access
 const projectStore = useProjectStore();
 const layersStore = useLayersStore();
-
-// Services
-const storage = useStorageService();
-const { saveAsset, getAsset, getProjectAssets, deleteAsset, getAllAssets } = storage;
+const { assets, isLoading: loading, error } = storeToRefs(projectStore);
 
 // Methods
 function openFileModal() {
-  // Set filePickerActive flag to true before opening the modal
   projectStore.setFilePickerActive(true);
   showFileModal.value = true;
 }
 
 function handleAssetSelected(asset) {
-  try {
-    // Save asset using the storage service
-    saveAsset(asset).then(savedAsset => {
-      assets.value.push(savedAsset);
-      showToastMessage(`Asset ${asset.name} added successfully`);
-    });
-  } catch (err) {
-    console.error('Error saving asset:', err);
-    showToastMessage(`Failed to add asset ${asset.name}`, 'error');
-  }
-  
-  // Refresh the assets list
-  loadProjectAssets();
-}
-
-function getFileType(filename) {
-  const extension = filename.split('.').pop().toLowerCase();
-  
-  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
-  const videoExts = ['mp4', 'webm', 'ogg', 'mov'];
-  
-  if (imageExts.includes(extension)) return 'image';
-  if (videoExts.includes(extension)) return 'video';
-  
-  return 'other';
+  // This function might be used if selecting an asset from the panel
+  // has a different behavior than using it directly.
+  // For now, it mainly adds the asset to the project.
+  projectStore.addAsset(asset);
+  showToastMessage(`Asset ${asset.name} is available in the project`);
 }
 
 function useAsset(asset) {
@@ -158,7 +131,7 @@ function useAsset(asset) {
   }
   
   // Create a new layer with this asset
-  const layer = layersStore.addLayer(layerType, {
+  layersStore.addLayer(layerType, {
     src: asset.url
   });
   
@@ -166,29 +139,10 @@ function useAsset(asset) {
 }
 
 async function handleAssetDeletion(assetId) {
-  try {
-    // Remove from assets list
-    const assetIndex = assets.value.findIndex(a => a.id === assetId);
-    if (assetIndex !== -1) {
-      const asset = assets.value[assetIndex];
-      
-      // Revoke object URL to free memory
-      if (asset.url && asset.url.startsWith('blob:')) {
-        URL.revokeObjectURL(asset.url);
-      }
-      
-      // Remove from list
-      assets.value.splice(assetIndex, 1);
-      
-      // Delete from storage
-      await deleteAsset(assetId);
-      
-      showToastMessage('Asset deleted');
+    if (confirm('Are you sure you want to delete this asset? This cannot be undone.')) {
+        await projectStore.deleteAsset(assetId);
+        showToastMessage('Asset deleted');
     }
-  } catch (error) {
-    console.error('Failed to delete asset:', error);
-    showToastMessage('Failed to delete asset');
-  }
 }
 
 // Show a toast message
@@ -200,36 +154,6 @@ function showToastMessage(message, duration = 3000) {
     showToast.value = false;
   }, duration);
 }
-
-// Load assets on component mount
-async function loadProjectAssets() {
-  loading.value = true;
-  error.value = null;
-  
-  try {
-    // For now, we'll get assets for the current project
-    // In a real implementation, we would get the current project ID
-    const projectId = 'current';
-    const storedAssets = await getProjectAssets(projectId);
-    
-    if (storedAssets && Array.isArray(storedAssets)) {
-      assets.value = storedAssets;
-    } else {
-      assets.value = [];
-    }
-  } catch (err) {
-    console.error('Failed to load assets:', err);
-    error.value = 'Failed to load assets';
-    assets.value = [];
-  } finally {
-    loading.value = false;
-  }
-}
-
-// Call loadAssets when the component is mounted
-onMounted(() => {
-  loadProjectAssets();
-});
 </script>
 
 <style scoped>

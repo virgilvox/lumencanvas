@@ -1,6 +1,7 @@
 import { verifyToken } from "@clerk/backend";
 import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client, bucketName } from "./utils/s3-client.js";
+import { corsHeaders } from "./utils/cors.js";
 
 async function streamToString(stream) {
   return new Promise((resolve, reject) => {
@@ -15,11 +16,7 @@ export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-      },
+      headers: corsHeaders,
       body: ''
     };
   }
@@ -37,7 +34,7 @@ export const handler = async (event) => {
     const authorizationHeader = event.headers.authorization;
     if (!authorizationHeader) {
       console.log("No authorization header found.");
-      return { statusCode: 401, body: JSON.stringify({ error: "Unauthenticated" }) };
+      return { statusCode: 401, headers: { ...corsHeaders }, body: JSON.stringify({ error: "Unauthenticated" }) };
     }
     
     const sessionToken = authorizationHeader.replace('Bearer ', '');
@@ -49,6 +46,7 @@ export const handler = async (event) => {
       console.log("Clerk verification failed, no user ID.");
       return {
         statusCode: 401,
+        headers: { ...corsHeaders },
         body: JSON.stringify({ error: "Unauthenticated" }),
       };
     }
@@ -72,7 +70,7 @@ export const handler = async (event) => {
         console.log("S3 returned NoSuchKey for prefix, treating as empty list.");
         return {
           statusCode: 200,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           body: JSON.stringify([])
         };
       }
@@ -101,7 +99,7 @@ export const handler = async (event) => {
       console.log("No project.json files found under user prefix. Returning empty array.");
       return {
         statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify([]),
       };
     }
@@ -143,16 +141,17 @@ export const handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify(projects),
     };
   } catch (error) {
     console.error("--- UNHANDLED ERROR in projects-list handler ---:", error);
     if (error.message && (error.message.includes('Unexpected JWT payload') || error.message.includes('Token is expired') || error.message.includes('invalid_token'))) {
-        return { statusCode: 401, body: JSON.stringify({ error: "Invalid or expired token" }) };
+        return { statusCode: 401, headers: { ...corsHeaders }, body: JSON.stringify({ error: "Invalid or expired token" }) };
     }
     return {
       statusCode: 500,
+      headers: { ...corsHeaders },
       body: JSON.stringify({ error: "Could not list projects due to an internal server error." }),
     };
   }

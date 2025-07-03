@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.840.0",
+    "@aws-sdk/s3-request-presigner": "^3.842.0",
     "@clerk/backend": "^2.3.1",
     "@clerk/vue": "^1.8.11",
     "@guolao/vue-monaco-editor": "^1.5.5",

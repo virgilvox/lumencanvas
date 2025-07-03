@@ -152,6 +152,9 @@ async function handleFileUpload(event) {
       },
     });
 
+    // After successful upload, make the file public
+    await api.assets.setPublic(key);
+
     const newAsset = {
       id: assetId,
       name: file.name,

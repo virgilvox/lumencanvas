@@ -147,7 +147,7 @@ watch(texture, (newTexture) => {
 }, { immediate: true });
 
 // Watch for changes that require video re-setup (like changing the src)
-watchEffect(setupVideo);
+watch(() => props.layer.content?.src, setupVideo, { immediate: true });
 
 onUnmounted(() => {
   if (videoElement.value) {

@@ -75,6 +75,17 @@ export const projectsAPI = {
   },
   
   async create(projectData) {
+    // Ensure name/description are in metadata
+    if (projectData.name) {
+      projectData.metadata = projectData.metadata || {};
+      projectData.metadata.name = projectData.name;
+      delete projectData.name;
+    }
+    if (projectData.description) {
+      projectData.metadata = projectData.metadata || {};
+      projectData.metadata.description = projectData.description;
+      delete projectData.description;
+    }
     return fetchAPI('/projects/create', {
       method: 'POST',
       body: JSON.stringify(projectData),
@@ -82,6 +93,17 @@ export const projectsAPI = {
   },
   
   async update(projectData) {
+    // Ensure name/description are in metadata
+    if (projectData.name) {
+      projectData.metadata = projectData.metadata || {};
+      projectData.metadata.name = projectData.name;
+      delete projectData.name;
+    }
+    if (projectData.description) {
+      projectData.metadata = projectData.metadata || {};
+      projectData.metadata.description = projectData.description;
+      delete projectData.description;
+    }
     return fetchAPI('/projects/update', {
       method: 'POST',
       body: JSON.stringify(projectData),
@@ -105,6 +127,20 @@ export const assetsAPI = {
       body: JSON.stringify({ fileName, fileType, projectId }),
     });
   },
+
+  async setPublic(key) {
+    return fetchAPI('/assets/set-public-acl', {
+      method: 'POST',
+      body: JSON.stringify({ key }),
+    });
+  },
+
+  async delete(key) {
+    return fetchAPI('/assets/delete', {
+        method: 'POST', // Using POST to send a body with the key
+        body: JSON.stringify({ key }),
+    });
+  }
 };
 
 export default {

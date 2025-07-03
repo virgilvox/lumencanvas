@@ -1,23 +1,20 @@
 import { verifyToken } from "@clerk/backend";
 import { ListObjectVersionsCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { s3Client, bucketName } from "./utils/s3-client.js";
+import { corsHeaders } from "./utils/cors.js";
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-      },
+      headers: corsHeaders,
       body: ''
     };
   }
   try {
     const authorizationHeader = event.headers.authorization;
     if (!authorizationHeader) {
-      return { statusCode: 401, body: JSON.stringify({ error: "Unauthenticated" }) };
+      return { statusCode: 401, headers: { ...corsHeaders }, body: JSON.stringify({ error: "Unauthenticated" }) };
     }
     
     const sessionToken = authorizationHeader.replace('Bearer ', '');
@@ -27,6 +24,7 @@ export const handler = async (event) => {
     if (!userId) {
       return {
         statusCode: 401,
+        headers: { ...corsHeaders },
         body: JSON.stringify({ error: "Unauthenticated" }),
       };
     }
@@ -35,6 +33,7 @@ export const handler = async (event) => {
     if (!projectId || projectId === 'undefined') {
         return {
             statusCode: 400,
+            headers: { ...corsHeaders },
             body: JSON.stringify({ error: 'Project ID is required.'})
         };
     }
@@ -63,7 +62,7 @@ export const handler = async (event) => {
     }
 
     if (objectsToDelete.length === 0) {
-        return { statusCode: 200, body: JSON.stringify({ message: "Project folder already empty or not found."}) };
+        return { statusCode: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: "Project folder already empty or not found."}) };
     }
 
     // Prepare objects for deletion
@@ -79,16 +78,17 @@ export const handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: "Project and all associated assets deleted successfully." }),
     };
   } catch (error) {
     console.error("Error deleting project:", error);
     if (error.message && (error.message.includes('Unexpected JWT payload') || error.message.includes('Token is expired') || error.message.includes('invalid_token'))) {
-        return { statusCode: 401, body: JSON.stringify({ error: "Invalid or expired token" }) };
+        return { statusCode: 401, headers: { ...corsHeaders }, body: JSON.stringify({ error: "Invalid or expired token" }) };
     }
     return {
       statusCode: 500,
+      headers: { ...corsHeaders },
       body: JSON.stringify({ error: "Could not delete project." }),
     };
   }

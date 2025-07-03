@@ -1,7 +1,6 @@
 import { verifyToken } from "@clerk/backend";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectAclCommand } from "@aws-sdk/client-s3";
 import { s3Client, bucketName } from "./utils/s3-client.js";
-import { nanoid } from "nanoid";
 import { corsHeaders } from "./utils/cors.js";
 
 export const handler = async (event) => {
@@ -24,66 +23,42 @@ export const handler = async (event) => {
     const userId = claims.sub;
 
     if (!userId) {
-      return {
-        statusCode: 401,
-        headers: { ...corsHeaders },
-        body: JSON.stringify({ error: "Unauthenticated" }),
-      };
+      return { statusCode: 401, headers: { ...corsHeaders }, body: JSON.stringify({ error: "Unauthenticated" }) };
     }
 
-    const projectData = JSON.parse(event.body);
-    const projectId = `proj_${nanoid()}`;
-    const key = `${userId}/${projectId}/project.json`;
-    const now = new Date().toISOString();
+    const { key } = JSON.parse(event.body);
 
-    const newProject = {
-      id: projectId,
-      version: "1.0",
-      metadata: {
-        id: projectId,
-        name: projectData.name || 'Untitled Project',
-        description: projectData.description || '',
-        created: now,
-        modified: now,
-        author: userId,
-      },
-      canvas: {
-        width: projectData.width || 1280,
-        height: projectData.height || 720,
-        background: '#000000',
-        blendMode: 'normal',
-      },
-      layers: [],
-      assets: [],
-      history: {
-        commands: [],
-        currentIndex: -1,
-      }
-    };
+    if (!key) {
+      return { statusCode: 400, headers: { ...corsHeaders }, body: JSON.stringify({ error: "Missing required field: key" }) };
+    }
+    
+    // Security check: ensure the user is modifying an object within their own folder
+    if (!key.startsWith(`${userId}/`)) {
+        return { statusCode: 403, headers: { ...corsHeaders }, body: JSON.stringify({ error: "Forbidden: You can only modify your own assets."}) }
+    }
 
-    const command = new PutObjectCommand({
+    const command = new PutObjectAclCommand({
       Bucket: bucketName,
       Key: key,
-      Body: JSON.stringify(newProject),
-      ContentType: "application/json",
+      ACL: 'public-read',
     });
 
     await s3Client.send(command);
 
     return {
-      statusCode: 201,
+      statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify(newProject),
+      body: JSON.stringify({ message: "Asset permissions updated successfully." }),
     };
   } catch (error) {
-    console.error("Error creating project:", error);
+    console.error("Error setting public ACL:", error);
     if (error.message && (error.message.includes('Unexpected JWT payload') || error.message.includes('Token is expired') || error.message.includes('invalid_token'))) {
         return { statusCode: 401, headers: { ...corsHeaders }, body: JSON.stringify({ error: "Invalid or expired token" }) };
     }
     return {
       statusCode: 500,
       headers: { ...corsHeaders },
-      body: JSON.stringify({ error: "Could not create project." }),
+      body: JSON.stringify({ error: "Could not update asset permissions." }),
     };
   }
 }; 

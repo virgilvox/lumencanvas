@@ -110,16 +110,16 @@ export const useProjectStore = defineStore('project', () => {
     
     // Directly set the store's state from the provided project object
     projectId.value = project.id;
-    projectName.value = project.metadata.name;
-    projectDescription.value = project.metadata.description;
-    canvasWidth.value = project.canvas.width;
-    canvasHeight.value = project.canvas.height;
-    canvasBackground.value = project.canvas.background;
+    projectName.value = project.metadata?.name || 'Untitled Project';
+    projectDescription.value = project.metadata?.description || '';
+    canvasWidth.value = project.canvas?.width || 800;
+    canvasHeight.value = project.canvas?.height || 600;
+    canvasBackground.value = project.canvas?.background || '#000000';
     assets.value = project.assets || [];
     layersStore.importLayers(project.layers || []);
     historyStore.clear();
     
-    lastSaved.value = new Date(project.metadata.modified || Date.now());
+    lastSaved.value = new Date(project.metadata?.modified || Date.now());
     
     // Also save it locally to prime the cache
     saveProjectToDB(project);
@@ -169,11 +169,11 @@ export const useProjectStore = defineStore('project', () => {
       
       // Update local store with data from server
       projectId.value = project.id;
-      projectName.value = project.name;
-      projectDescription.value = project.description;
-      canvasWidth.value = project.canvas.width;
-      canvasHeight.value = project.canvas.height;
-      canvasBackground.value = project.canvas.background;
+      projectName.value = project.metadata?.name || 'Untitled Project';
+      projectDescription.value = project.metadata?.description || '';
+      canvasWidth.value = project.canvas?.width || 800;
+      canvasHeight.value = project.canvas?.height || 600;
+      canvasBackground.value = project.canvas?.background || '#000000';
       assets.value = project.assets || [];
       layersStore.importLayers(project.layers || []);
       historyStore.clear();
@@ -181,7 +181,7 @@ export const useProjectStore = defineStore('project', () => {
       // Cache the loaded project locally
       await saveProjectToDB(project);
       
-      lastSaved.value = new Date(project.updatedAt || Date.now());
+      lastSaved.value = new Date(project.metadata?.modified || Date.now());
 
     } catch (error) {
       console.error('Failed to load project from server, trying local cache:', error);
@@ -510,6 +510,30 @@ export const useProjectStore = defineStore('project', () => {
       }
   }
 
+  async function deleteAsset(assetId) {
+    const assetIndex = assets.value.findIndex(a => a.id === assetId);
+    if (assetIndex === -1) return;
+
+    const assetToDelete = assets.value[assetIndex];
+    
+    // Optimistically remove from UI
+    assets.value.splice(assetIndex, 1);
+
+    try {
+        // Call API to delete from storage
+        if (assetToDelete.key) {
+            await api.assets.delete(assetToDelete.key);
+        }
+        // Save the updated project state (with asset removed)
+        await saveProject();
+    } catch (error) {
+        console.error('Failed to delete asset from cloud storage:', error);
+        // If deletion fails, add the asset back to the UI for consistency
+        assets.value.splice(assetIndex, 0, assetToDelete);
+        // Optionally, show an error message to the user
+    }
+  }
+
   return {
     // State
     projectId,
@@ -553,6 +577,7 @@ export const useProjectStore = defineStore('project', () => {
     setCanvasBackground,
     setName,
     setDescription,
-    addAsset
+    addAsset,
+    deleteAsset
   };
 });

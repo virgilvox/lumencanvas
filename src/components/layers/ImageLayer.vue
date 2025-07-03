@@ -103,7 +103,12 @@ function getBlendMode(mode) {
 watchEffect(async () => {
   if (props.layer.content?.src) {
     try {
-      texture.value = await PIXI.Assets.load(props.layer.content.src);
+      texture.value = await PIXI.Assets.load({
+        src: props.layer.content.src,
+        data: {
+          crossorigin: 'anonymous',
+        }
+      });
     } catch (e) {
       console.error(`Failed to load texture for layer ${props.layer.id}:`, e);
       texture.value = PIXI.Texture.WHITE;

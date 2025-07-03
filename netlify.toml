@@ -10,6 +10,18 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/api/assets/delete"
+  to = "/.netlify/functions/assets-delete"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/assets/set-public-acl"
+  to = "/.netlify/functions/assets-set-public-acl"
+  status = 200
+  force = true
+
 # API proxy rules for Projects
 [[redirects]]
   from = "/api/projects/list"
@@ -65,7 +77,7 @@
 
 # Image CDN configuration
 [images]
-  remote_images = [ "https://lumencanvas.netlify.app/media/.*" ]
+  remote_images = [ "https://lumencanvas.netlify.app/media/.*", "https://lumencanvas.nyc3.digitaloceanspaces.com/.*" ]
 
 # Redirect for thumbnail service
 [[redirects]]
