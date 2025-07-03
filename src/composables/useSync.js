@@ -20,6 +20,11 @@ export function useSync(projectId) {
       connectionStatus.value = event.status;
     });
 
+    provider.on('error', event => {
+      console.error('WebSocket error:', event);
+      connectionStatus.value = 'error';
+    });
+
     instances.set(projectId, {
       doc,
       provider,

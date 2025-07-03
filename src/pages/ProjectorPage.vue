@@ -28,7 +28,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useSync } from '../composables/useSync';
 import { Application } from 'vue3-pixi';
@@ -63,20 +63,35 @@ onMounted(() => {
   if (projectId) {
     yjs_instance = useSync(projectId);
 
-    const { yLayers, yCanvas } = yjs_instance;
+    const { yLayers, yCanvas, connectionStatus } = yjs_instance;
+
+    watch(connectionStatus, (status) => {
+      if (status === 'disconnected' || status === 'error') {
+        // Fallback to fetching from API if WebSocket fails
+        console.warn('WebSocket connection failed, falling back to API.');
+        loadProjectFromApi();
+      }
+    });
 
     const updateLocalState = () => {
-      layers.value = yLayers.toArray();
+      layers.value = yLayers.toArray().map(l => l.toJSON());
       canvasWidth.value = yCanvas.get('width') || 1280;
       canvasHeight.value = yCanvas.get('height') || 720;
       const bgColor = yCanvas.get('background') || '#000000';
       canvasBackground.value = parseInt(bgColor.replace('#', '0x'));
     };
-
+    
     yLayers.observe(updateLocalState);
     yCanvas.observe(updateLocalState);
 
-    updateLocalState(); // Initial sync
+    // Initial sync - if not connected after a short delay, fetch from API
+    setTimeout(() => {
+      if (connectionStatus.value !== 'connected') {
+        loadProjectFromApi();
+      } else {
+        updateLocalState();
+      }
+    }, 1500);
   }
 
   document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -84,6 +99,21 @@ onMounted(() => {
   // Enter fullscreen on first click
   projectorPageRef.value?.addEventListener('click', enterFullscreen, { once: true });
 });
+
+async function loadProjectFromApi() {
+  try {
+    const project = await api.projects.get(projectId);
+    if (project) {
+      layers.value = project.layers || [];
+      canvasWidth.value = project.canvas?.width || 1280;
+      canvasHeight.value = project.canvas?.height || 720;
+      const bgColor = project.canvas?.background || '#000000';
+      canvasBackground.value = parseInt(bgColor.replace('#', '0x'));
+    }
+  } catch (err) {
+    console.error(`Failed to fetch project ${projectId} from API:`, err);
+  }
+}
 
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange);
