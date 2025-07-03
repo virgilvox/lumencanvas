@@ -74,7 +74,7 @@ onMounted(() => {
     });
 
     const updateLocalState = () => {
-      layers.value = yLayers.toArray().map(l => l.toJSON());
+      layers.value = yLayers.toArray();
       canvasWidth.value = yCanvas.get('width') || 1280;
       canvasHeight.value = yCanvas.get('height') || 720;
       const bgColor = yCanvas.get('background') || '#000000';
