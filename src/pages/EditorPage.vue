@@ -23,7 +23,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import EditorLayout from '../layouts/EditorLayout.vue';
 import Sidebar from '../components/Sidebar.vue';
 import CanvasStage from '../components/CanvasStage.vue';
@@ -32,6 +32,7 @@ import CodeEditor from '../components/CodeEditor.vue';
 import TopBar from '../components/TopBar.vue';
 import { useLayersStore } from '../store/layers';
 import { useProjectStore } from '../store/project';
+import { useSync } from '../composables/useSync';
 
 const props = defineProps({
   id: {
@@ -100,11 +101,31 @@ function handleOpenCodeEditor(event) {
 
 onMounted(() => {
   const initialData = history.state.project;
-  projectStore.loadProject(props.id, initialData);
+  projectStore.loadProject(props.id, initialData).then(() => {
+    const { yLayers, yCanvas } = useSync(props.id);
+    
+    // Initial sync of project data to Yjs doc
+    yLayers.delete(0, yLayers.length);
+    yLayers.insert(0, JSON.parse(JSON.stringify(layersStore.layers)));
+    yCanvas.set('width', projectStore.canvasWidth);
+    yCanvas.set('height', projectStore.canvasHeight);
+    yCanvas.set('background', projectStore.canvasBackground);
+
+    // Watch for changes in Pinia store and update Yjs doc
+    watch(() => layersStore.layers, (newLayers) => {
+      yLayers.delete(0, yLayers.length);
+      yLayers.insert(0, JSON.parse(JSON.stringify(newLayers)));
+    }, { deep: true });
+
+    watch(() => projectStore.canvasWidth, (width) => yCanvas.set('width', width));
+    watch(() => projectStore.canvasHeight, (height) => yCanvas.set('height', height));
+    watch(() => projectStore.canvasBackground, (bg) => yCanvas.set('background', bg));
+  });
+
   window.addEventListener('open-code-editor', handleOpenCodeEditor);
 });
 
 onUnmounted(() => {
   window.removeEventListener('open-code-editor', handleOpenCodeEditor);
 });
-</script> 
+</script>

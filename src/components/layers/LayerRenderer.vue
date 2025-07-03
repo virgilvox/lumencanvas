@@ -2,8 +2,8 @@
   <component
     :is="layerComponent"
     v-if="layer.visible && layerComponent"
-    :layer="layerWithSelection"
-    :canvas-size="canvasSize"
+    :layer="layer"
+    :blendMode="getBlendMode(layer.blendMode)"
     @request-edit="$emit('requestEdit', layer)"
     @pointerdown="$emit('pointerdown', $event)"
   />
@@ -11,7 +11,6 @@
 
 <script setup>
 import { computed } from 'vue';
-import { storeToRefs } from 'pinia';
 import { useLayersStore } from '../../store/layers';
 import ImageLayer from './ImageLayer.vue';
 import VideoLayer from './VideoLayer.vue';
@@ -24,26 +23,14 @@ const props = defineProps({
   layer: {
     type: Object,
     required: true
-  },
-  canvasSize: {
-    type: Object,
-    default: () => ({ width: 800, height: 600 })
   }
 });
 
-const emit = defineEmits(['requestEdit', 'pointerdown']);
+defineEmits(['requestEdit', 'pointerdown']);
 
 const layersStore = useLayersStore();
-const { selectedLayerId } = storeToRefs(layersStore);
 const { LayerTypes } = layersStore;
 
-// Add selection state to layer
-const layerWithSelection = computed(() => ({
-  ...props.layer,
-  selected: props.layer.id === selectedLayerId.value
-}));
-
-// Map layer types to components
 const layerComponent = computed(() => {
   const components = {
     [LayerTypes.IMAGE]: ImageLayer,
@@ -56,10 +43,13 @@ const layerComponent = computed(() => {
   return components[props.layer.type] || null;
 });
 
-const BlendModeMap = {
-  normal: PIXI.BLEND_MODES.NORMAL,
-  add: PIXI.BLEND_MODES.ADD,
-  screen: PIXI.BLEND_MODES.SCREEN,
-  multiply: PIXI.BLEND_MODES.MULTIPLY,
-};
+function getBlendMode(mode) {
+  const modes = {
+    normal: PIXI.BLEND_MODES.NORMAL,
+    add: PIXI.BLEND_MODES.ADD,
+    screen: PIXI.BLEND_MODES.SCREEN,
+    multiply: PIXI.BLEND_MODES.MULTIPLY,
+  };
+  return modes[mode] ?? PIXI.BLEND_MODES.NORMAL;
+}
 </script>
