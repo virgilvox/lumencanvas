@@ -26,7 +26,13 @@
         No assets yet. Click "Open File Browser" to add files.
       </div>
       
-      <div v-else v-for="asset in assets" :key="asset.id" class="asset-item">
+      <div 
+        v-else v-for="asset in assets" 
+        :key="asset.id" 
+        class="asset-item"
+        :class="{ active: selectedAsset && selectedAsset.id === asset.id }"
+        @click="selectAsset(asset)"
+      >
         <div class="asset-preview">
           <img v-if="asset.type === 'image'" :src="asset.url" :alt="asset.name" crossorigin="anonymous" />
           <div v-else-if="asset.type === 'video'" class="video-preview">
@@ -51,12 +57,12 @@
         </div>
         
         <div class="asset-actions">
-          <button @click="useAsset(asset)" class="action-btn" title="Use Asset">
+          <button @click.stop="useAsset(asset)" class="action-btn" title="Use Asset">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
           </button>
-          <button @click="handleAssetDeletion(asset.id)" class="action-btn" title="Delete">
+          <button @click.stop="handleAssetDeletion(asset.id)" class="action-btn" title="Delete">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -65,6 +71,25 @@
             </svg>
           </button>
         </div>
+      </div>
+    </div>
+
+    <div class="preview-section">
+      <div v-if="selectedAsset" class="preview-content">
+        <div class="preview-box">
+          <img v-if="selectedAsset.type === 'image'" :src="selectedAsset.url" :alt="selectedAsset.name" class="preview-media" crossorigin="anonymous" />
+          <video v-else-if="selectedAsset.type === 'video'" :src="selectedAsset.url" controls muted loop autoplay class="preview-media"></video>
+          <div v-else class="generic-preview-large">
+            <span>No Preview Available</span>
+          </div>
+        </div>
+        <div class="preview-details">
+          <p class="preview-name" :title="selectedAsset.name">{{ selectedAsset.name }}</p>
+          <p class="preview-type">{{ selectedAsset.type }}</p>
+        </div>
+      </div>
+      <div v-else class="preview-empty">
+        <p>Select an asset to preview</p>
       </div>
     </div>
     
@@ -94,16 +119,25 @@ import { storeToRefs } from 'pinia';
 const showFileModal = ref(false);
 const showToast = ref(false);
 const toastMessage = ref('');
+const selectedAssetId = ref(null);
 
 // Store access
 const projectStore = useProjectStore();
 const layersStore = useLayersStore();
 const { assets, isLoading: loading, error } = storeToRefs(projectStore);
 
+const selectedAsset = computed(() => {
+  return assets.value.find(a => a.id === selectedAssetId.value) || null;
+});
+
 // Methods
 function openFileModal() {
   projectStore.setFilePickerActive(true);
   showFileModal.value = true;
+}
+
+function selectAsset(asset) {
+  selectedAssetId.value = asset.id;
 }
 
 function handleAssetSelected(asset) {
@@ -198,7 +232,7 @@ function showToastMessage(message, duration = 3000) {
 }
 
 .assets-list {
-  flex: 1;
+  flex-grow: 1;
   overflow-y: auto;
   padding: 12px;
 }
@@ -212,6 +246,12 @@ function showToastMessage(message, duration = 3000) {
   border-radius: 4px;
   background-color: #1a1a1a;
   transition: background-color 0.2s;
+  cursor: pointer;
+}
+
+.asset-item.active {
+  background-color: #2a2a2a;
+  outline: 1px solid var(--accent);
 }
 
 .asset-item:hover {
@@ -313,6 +353,71 @@ function showToastMessage(message, duration = 3000) {
 
 .error-state button:hover {
   background-color: #444;
+}
+
+/* Preview Section */
+.preview-section {
+  flex-shrink: 0;
+  padding: 12px;
+  border-top: 1px solid #333;
+  background-color: #1a1a1a;
+}
+
+.preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preview-box {
+  width: 100%;
+  height: 150px;
+  background-color: #111;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.preview-media {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.generic-preview-large {
+  color: #666;
+  font-size: 14px;
+}
+
+.preview-details {
+  text-align: center;
+}
+
+.preview-name {
+  font-size: 14px;
+  color: #E0E0E0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.preview-type {
+  font-size: 12px;
+  color: #888;
+  text-transform: capitalize;
+  margin: 0;
+}
+
+.preview-empty {
+  height: 198px; /* Match height of content */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 14px;
 }
 
 /* Toast notification */

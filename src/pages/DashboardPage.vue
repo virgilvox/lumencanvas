@@ -1,46 +1,59 @@
 <template>
   <div class="dashboard-page">
-    <header class="dashboard-header">
-      <h1>Your Projects</h1>
-      <button class="create-btn" @click="createNew">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        <span>Create New Project</span>
-      </button>
+    <header class="app-header">
+      <div class="logo-area">
+        <router-link to="/dashboard">LumenCanvas</router-link>
+      </div>
+      <div class="user-area">
+        <SignedIn>
+          <UserButton after-sign-out-url="/" />
+        </SignedIn>
+      </div>
     </header>
 
-    <div v-if="loading" class="loading-state">
-      <p>Loading projects...</p>
-    </div>
-    
-    <div v-else-if="error" class="error-state">
-      <h2>Something went wrong</h2>
-      <p>{{ error }}</p>
-      <button class="create-btn" @click="fetchProjects">Retry</button>
-    </div>
-    
-    <div v-else-if="projects.length === 0" class="empty-state">
-      <h2>Welcome to LumenCanvas</h2>
-      <p>You don't have any projects yet. Let's create your first one!</p>
-      <button class="create-btn large" @click="createNew">
-        Create Your First Project
-      </button>
-    </div>
+    <div class="dashboard-content">
+      <header class="dashboard-header">
+        <h1>Your Projects</h1>
+        <button class="create-btn" @click="createNew">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Create New Project</span>
+        </button>
+      </header>
 
-    <div v-else class="project-grid">
-      <div 
-        v-for="project in validProjects" 
-        :key="project.id" 
-        class="project-card"
-        @click="openProject(project.id)"
-      >
-        <div class="card-content">
-          <h3 class="project-name">{{ project.metadata?.name }}</h3>
-          <p class="project-updated">Last updated: {{ formatDate(project.metadata?.modified) }}</p>
-        </div>
-        <div class="card-actions">
-          <button @click.stop="deleteProject(project.id)" class="delete-btn">
-            Delete
-          </button>
+      <div v-if="loading" class="loading-state">
+        <p>Loading projects...</p>
+      </div>
+      
+      <div v-else-if="error" class="error-state">
+        <h2>Something went wrong</h2>
+        <p>{{ error }}</p>
+        <button class="create-btn" @click="fetchProjects">Retry</button>
+      </div>
+      
+      <div v-else-if="projects.length === 0" class="empty-state">
+        <h2>Welcome to LumenCanvas</h2>
+        <p>You don't have any projects yet. Let's create your first one!</p>
+        <button class="create-btn large" @click="createNew">
+          Create Your First Project
+        </button>
+      </div>
+
+      <div v-else class="project-grid">
+        <div 
+          v-for="project in validProjects" 
+          :key="project.id" 
+          class="project-card"
+          @click="openProject(project.id)"
+        >
+          <div class="card-content">
+            <h3 class="project-name">{{ project.metadata?.name }}</h3>
+            <p class="project-updated">Last updated: {{ formatDate(project.metadata?.modified) }}</p>
+          </div>
+          <div class="card-actions">
+            <button @click.stop="deleteProject(project.id)" class="delete-btn">
+              Delete
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -56,7 +69,7 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../services/api';
-import { useSession } from '@clerk/vue';
+import { useSession, SignedIn, UserButton } from '@clerk/vue';
 import CreateProjectModal from '../components/CreateProjectModal.vue';
 import { useProjectStore } from '../store/project';
 
@@ -136,9 +149,41 @@ watch(session, (newSession) => {
 
 <style scoped>
 .dashboard-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background-color: var(--panel-bg);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.logo-area a {
+  font-weight: 500;
+  font-size: 16px;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.user-area {
+  display: flex;
+  align-items: center;
+}
+
+.dashboard-content {
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
+  overflow-y: auto;
+  flex-grow: 1;
 }
 .dashboard-header {
   display: flex;

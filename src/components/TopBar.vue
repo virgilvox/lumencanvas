@@ -1,7 +1,12 @@
 <template>
   <header class="top-bar">
     <div class="left-tools">
-      <div class="logo">LumenCanvas</div>
+      <router-link to="/dashboard" class="tool-button back-to-dashboard" title="Back to Dashboard">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </router-link>
+      <div class="logo">{{ projectStore.projectName || 'LumenCanvas' }}</div>
     </div>
 
     <div class="center-tools">
@@ -83,7 +88,14 @@
           <Save :size="16" />
           {{ saveStatus }}
         </button>
-        <div class="user-avatar">G</div>
+        <SignedIn>
+          <UserButton after-sign-out-url="/" />
+        </SignedIn>
+        <SignedOut>
+          <router-link to="/sign-in">
+            <button class="tool-button">Sign In</button>
+          </router-link>
+        </SignedOut>
       </div>
     </div>
     
@@ -159,6 +171,7 @@ import { useRouter } from 'vue-router';
 import PreviewModal from './PreviewModal.vue';
 import BackupManager from './BackupManager.vue';
 import ProjectSettingsModal from './ProjectSettingsModal.vue';
+import { SignedIn, SignedOut, UserButton } from '@clerk/vue';
 
 const layersStore = useLayersStore();
 const projectStore = useProjectStore();
@@ -459,6 +472,11 @@ function togglePreview() {
 .logo {
   font-weight: 500;
   font-size: 16px;
+  white-space: nowrap;
+}
+
+.back-to-dashboard {
+  text-decoration: none;
 }
 
 .tool-group {
