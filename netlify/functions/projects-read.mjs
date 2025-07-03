@@ -12,6 +12,17 @@ async function streamToString(stream) {
 }
 
 export const handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+      },
+      body: ''
+    };
+  }
   try {
     const authorizationHeader = event.headers.authorization;
     if (!authorizationHeader) {
@@ -39,12 +50,20 @@ export const handler = async (event) => {
 
     const key = `${userId}/${projectId}/project.json`;
 
-    const command = new GetObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-    });
+    let Body;
+    try {
+      const command = new GetObjectCommand({ Bucket: bucketName, Key: key });
+      ({ Body } = await s3Client.send(command));
+    } catch (err) {
+      if (err.name === 'NoSuchKey') {
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ error: 'Project not found.' }),
+        };
+      }
+      throw err;
+    }
 
-    const { Body } = await s3Client.send(command);
     const projectDataString = await streamToString(Body);
     
     return {

@@ -3,6 +3,17 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client, bucketName } from "./utils/s3-client.js";
 
 export const handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+      },
+      body: ''
+    };
+  }
   try {
     const authorizationHeader = event.headers.authorization;
     if (!authorizationHeader) {
@@ -20,37 +31,41 @@ export const handler = async (event) => {
       };
     }
     
-    const { id: projectId } = event.queryStringParameters;
+    const projectData = JSON.parse(event.body);
+    const projectId = projectData.id;
+
     if (!projectId) {
         return {
             statusCode: 400,
-            body: JSON.stringify({ error: 'Project ID is required.'})
+            body: JSON.stringify({ error: 'Project ID is required in the request body.'})
         };
     }
-
-    const projectData = JSON.parse(event.body);
     
     // Ensure owner and project ID cannot be changed
-    if (projectData.owner && projectData.owner !== userId) {
+    if (projectData.metadata?.author && projectData.metadata.author !== userId) {
         return { statusCode: 403, body: JSON.stringify({ error: "Forbidden" })};
     }
-    projectData.id = projectId;
-    projectData.owner = userId;
-    projectData.updatedAt = new Date().toISOString();
+    if (!projectData.metadata) {
+      projectData.metadata = {};
+    }
+    projectData.metadata.id = projectId;
+    projectData.metadata.author = userId;
+    projectData.metadata.modified = new Date().toISOString();
 
     const key = `${userId}/${projectId}/project.json`;
 
-    const command = new PutObjectCommand({
+    const putCommand = new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
       Body: JSON.stringify(projectData),
       ContentType: "application/json",
     });
 
-    await s3Client.send(command);
+    await s3Client.send(putCommand);
 
     return {
       statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: "Project updated successfully." }),
     };
   } catch (error) {

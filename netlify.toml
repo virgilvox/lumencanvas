@@ -20,29 +20,32 @@
 [[redirects]]
   from = "/api/projects/create"
   to = "/.netlify/functions/projects-create"
-  status = 201
+  status = 200
   force = true
   
+[[redirects]]
+  from = "/api/projects/update"
+  to = "/.netlify/functions/projects-update"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/api/projects/:id"
   to = "/.netlify/functions/projects-read?id=:id"
   status = 200
   force = true
-  conditions = { "method" = ["GET"] }
 
 [[redirects]]
   from = "/api/projects/:id"
   to = "/.netlify/functions/projects-update?id=:id"
   status = 200
   force = true
-  conditions = { "method" = ["PUT", "PATCH"] }
 
 [[redirects]]
   from = "/api/projects/:id"
   to = "/.netlify/functions/projects-delete?id=:id"
   status = 200
   force = true
-  conditions = { "method" = ["DELETE"] }
 
 # SPA fallback rule
 [[redirects]]
@@ -67,5 +70,5 @@
 # Redirect for thumbnail service
 [[redirects]]
   from = "/imgcdn/*"
-  to = "/.netlify/images?url=/media/:splat&w=320&h=320&fit=cover"
+  to = "/.netlify/images?url=:splat&w=120&h=120&fit=cover"
   status = 200 

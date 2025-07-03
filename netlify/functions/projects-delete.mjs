@@ -1,8 +1,19 @@
 import { verifyToken } from "@clerk/backend";
-import { DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import { ListObjectVersionsCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { s3Client, bucketName } from "./utils/s3-client.js";
 
 export const handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+      },
+      body: ''
+    };
+  }
   try {
     const authorizationHeader = event.headers.authorization;
     if (!authorizationHeader) {
@@ -21,7 +32,7 @@ export const handler = async (event) => {
     }
     
     const { id: projectId } = event.queryStringParameters;
-    if (!projectId) {
+    if (!projectId || projectId === 'undefined') {
         return {
             statusCode: 400,
             body: JSON.stringify({ error: 'Project ID is required.'})
@@ -30,14 +41,28 @@ export const handler = async (event) => {
 
     const prefix = `${userId}/${projectId}/`;
 
-    // List all objects in the project folder
-    const listCommand = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: prefix,
-    });
-    const listedObjects = await s3Client.send(listCommand);
+    const prefixesToCheck = [prefix];
 
-    if (!listedObjects.Contents || listedObjects.Contents.length === 0) {
+    const objectsToDelete = [];
+
+    for (const prefix of prefixesToCheck) {
+      const listCommand = new ListObjectVersionsCommand({ Bucket: bucketName, Prefix: prefix });
+      try {
+        const listedObjectVersions = await s3Client.send(listCommand);
+        if (listedObjectVersions.Versions) {
+          objectsToDelete.push(...listedObjectVersions.Versions.map(v => ({ Key: v.Key, VersionId: v.VersionId })));
+        }
+        if (listedObjectVersions.DeleteMarkers) {
+          objectsToDelete.push(...listedObjectVersions.DeleteMarkers.map(dm => ({ Key: dm.Key, VersionId: dm.VersionId })));
+        }
+      } catch (listErr) {
+        if (listErr.name !== 'NoSuchKey') {
+          console.error(`Error listing objects with prefix ${prefix}:`, listErr);
+        }
+      }
+    }
+
+    if (objectsToDelete.length === 0) {
         return { statusCode: 200, body: JSON.stringify({ message: "Project folder already empty or not found."}) };
     }
 
@@ -45,7 +70,7 @@ export const handler = async (event) => {
     const deleteParams = {
         Bucket: bucketName,
         Delete: {
-            Objects: listedObjects.Contents.map(({ Key }) => ({ Key })),
+            Objects: objectsToDelete,
         },
     };
 
@@ -54,6 +79,7 @@ export const handler = async (event) => {
 
     return {
       statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: "Project and all associated assets deleted successfully." }),
     };
   } catch (error) {

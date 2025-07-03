@@ -102,6 +102,29 @@ export const useProjectStore = defineStore('project', () => {
     return plain;
   }
 
+  function setCurrentProjectData(project) {
+    if (!project || !project.id) {
+      console.error("setCurrentProjectData called with invalid project data");
+      return;
+    }
+    
+    // Directly set the store's state from the provided project object
+    projectId.value = project.id;
+    projectName.value = project.metadata.name;
+    projectDescription.value = project.metadata.description;
+    canvasWidth.value = project.canvas.width;
+    canvasHeight.value = project.canvas.height;
+    canvasBackground.value = project.canvas.background;
+    assets.value = project.assets || [];
+    layersStore.importLayers(project.layers || []);
+    historyStore.clear();
+    
+    lastSaved.value = new Date(project.metadata.modified || Date.now());
+    
+    // Also save it locally to prime the cache
+    saveProjectToDB(project);
+  }
+
   // Save project
   async function saveProject() {
     if (!projectId.value) return;
@@ -113,7 +136,7 @@ export const useProjectStore = defineStore('project', () => {
       await saveProjectToDB(dataToSave);
       
       // Then sync with the server
-      await api.projects.update(projectId.value, dataToSave);
+      await api.projects.update(dataToSave);
 
       lastSaved.value = new Date();
     } catch (error) {
@@ -125,8 +148,21 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   // Load project
-  async function loadProject(id) {
+  async function loadProject(id, initialData = null) {
+    if (projectId.value === id && !initialData) {
+      console.log(`Project ${id} is already loaded and no new initial data provided.`);
+      return;
+    }
+
     isLoading.value = true;
+    
+    // If initial data is provided, use it immediately
+    if (initialData) {
+      setCurrentProjectData(initialData);
+      isLoading.value = false;
+      return;
+    }
+    
     try {
       const project = await api.projects.get(id);
       if (!project) throw new Error('Project not found on server');
@@ -330,20 +366,20 @@ export const useProjectStore = defineStore('project', () => {
 
   // Create a new project
   async function createNewProject(options = {}) {
-      const newProjectData = createEmptyProject(options);
-      try {
-          const { projectId: newId } = await api.projects.create(newProjectData);
-          await loadProject(newId);
-          return newId;
-      } catch(error) {
-          console.error("Failed to create new project on the server, saving locally.", error);
-          // Fallback to local-only project if API fails
-          const localId = `local_${Date.now()}`;
-          newProjectData.id = localId;
-          await saveProjectToDB(newProjectData);
-          await loadProject(localId);
-          return localId;
-      }
+    const newProjectData = createEmptyProject(options);
+    try {
+      const newProject = await api.projects.create(newProjectData);
+      await loadProject(newProject.id);
+      return newProject.id;
+    } catch(error) {
+      console.error("Failed to create new project on the server, saving locally.", error);
+      // Fallback to local-only project if API fails
+      const localId = `local_${Date.now()}`;
+      newProjectData.id = localId;
+      await saveProjectToDB(newProjectData);
+      await loadProject(localId);
+      return localId;
+    }
   }
 
   // Get project backups
@@ -500,6 +536,7 @@ export const useProjectStore = defineStore('project', () => {
     initProject,
     saveProject,
     loadProject,
+    setCurrentProjectData,
     exportAsZip,
     importFromZip,
     uploadAsset,

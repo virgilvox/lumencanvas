@@ -12,6 +12,12 @@
       <p>Loading projects...</p>
     </div>
     
+    <div v-else-if="error" class="error-state">
+      <h2>Something went wrong</h2>
+      <p>{{ error }}</p>
+      <button class="create-btn" @click="fetchProjects">Retry</button>
+    </div>
+    
     <div v-else-if="projects.length === 0" class="empty-state">
       <h2>Welcome to LumenCanvas</h2>
       <p>You don't have any projects yet. Let's create your first one!</p>
@@ -22,14 +28,14 @@
 
     <div v-else class="project-grid">
       <div 
-        v-for="project in projects" 
+        v-for="project in validProjects" 
         :key="project.id" 
         class="project-card"
         @click="openProject(project.id)"
       >
         <div class="card-content">
-          <h3 class="project-name">{{ project.name }}</h3>
-          <p class="project-updated">Last updated: {{ formatDate(project.updatedAt) }}</p>
+          <h3 class="project-name">{{ project.metadata?.name }}</h3>
+          <p class="project-updated">Last updated: {{ formatDate(project.metadata?.modified) }}</p>
         </div>
         <div class="card-actions">
           <button @click.stop="deleteProject(project.id)" class="delete-btn">
@@ -38,41 +44,55 @@
         </div>
       </div>
     </div>
+    
+    <CreateProjectModal 
+      v-model="showCreateModal"
+      @project-created="handleProjectCreated"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../services/api';
 import { useSession } from '@clerk/vue';
+import CreateProjectModal from '../components/CreateProjectModal.vue';
+import { useProjectStore } from '../store/project';
 
 const router = useRouter();
 const projects = ref([]);
 const loading = ref(true);
+const error = ref(null);
 const { session } = useSession();
+const showCreateModal = ref(false);
+const projectStore = useProjectStore();
 
 async function fetchProjects() {
   loading.value = true;
+  error.value = null;
   try {
-    const token = await session.value?.getToken();
-    projects.value = await api.projects.list(token);
-  } catch (error) {
-    console.error('Failed to fetch projects:', error);
-    // Handle error, e.g., show a toast notification
+    projects.value = await api.projects.list();
+  } catch (err) {
+    console.error('Failed to fetch projects:', err);
+    error.value = 'Could not load projects. Please try again later.';
+    projects.value = [];
   } finally {
     loading.value = false;
   }
 }
 
 async function createNew() {
-  try {
-    const token = await session.value?.getToken();
-    const newProject = await api.projects.create({ name: 'Untitled Project' }, token);
-    router.push(`/editor/${newProject.id}`);
-  } catch (error) {
-    console.error('Failed to create project:', error);
-  }
+  showCreateModal.value = true;
+}
+
+function handleProjectCreated(newProject) {
+  projectStore.setCurrentProjectData(newProject);
+  router.push({ 
+    name: 'editor', 
+    params: { id: newProject.id },
+    state: { project: newProject }
+  });
 }
 
 function openProject(projectId) {
@@ -82,14 +102,17 @@ function openProject(projectId) {
 async function deleteProject(projectId) {
   if (confirm('Are you sure you want to delete this project? This cannot be undone.')) {
     try {
-      const token = await session.value?.getToken();
-      await api.projects.delete(projectId, token);
+      await api.projects.delete(projectId);
       await fetchProjects(); // Refresh the list
     } catch (error) {
       console.error('Failed to delete project:', error);
     }
   }
 }
+
+const validProjects = computed(() => {
+  return projects.value.filter(p => p && p.id && p.metadata);
+});
 
 function formatDate(dateString) {
   if (!dateString) return 'N/A';
@@ -98,7 +121,17 @@ function formatDate(dateString) {
   });
 }
 
-onMounted(fetchProjects);
+onMounted(() => {
+  if (session.value) {
+    fetchProjects();
+  }
+});
+
+watch(session, (newSession) => {
+  if (newSession) {
+    fetchProjects();
+  }
+});
 </script>
 
 <style scoped>
@@ -204,5 +237,13 @@ h1 {
   text-align: center;
   padding: 4rem;
   color: #888;
+}
+.error-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  border: 2px dashed #ff4444;
+  border-radius: 8px;
+  margin-top: 2rem;
+  color: #ff4444;
 }
 </style> 

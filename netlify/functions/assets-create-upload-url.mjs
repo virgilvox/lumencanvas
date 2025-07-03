@@ -32,7 +32,7 @@ export const handler = async (event) => {
     }
 
     const assetId = nanoid();
-    const key = `${projectId}/${assetId}-${fileName}`;
+    const key = `${userId}/${projectId}/${assetId}-${fileName}`;
 
     const command = new PutObjectCommand({
       Bucket: bucketName,

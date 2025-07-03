@@ -15,6 +15,8 @@ const API_BASE_URL = '/api';
 async function fetchAPI(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
   
+  const token = await window.Clerk.session?.getToken();
+
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
@@ -22,8 +24,8 @@ async function fetchAPI(endpoint, options = {}) {
     },
   };
   
-  if (options.token) {
-    defaultOptions.headers['Authorization'] = `Bearer ${options.token}`;
+  if (token) {
+    defaultOptions.headers['Authorization'] = `Bearer ${token}`;
   }
   
   const fetchOptions = {
@@ -64,34 +66,31 @@ async function fetchAPI(endpoint, options = {}) {
  * Project API methods
  */
 export const projectsAPI = {
-  async list(token) {
-    return fetchAPI('/projects/list', { token });
+  async list() {
+    return fetchAPI('/projects/list');
   },
   
-  async get(id, token) {
-    return fetchAPI(`/projects/${id}`, { token });
+  async get(id) {
+    return fetchAPI(`/projects/${id}`);
   },
   
-  async create(projectData, token) {
+  async create(projectData) {
     return fetchAPI('/projects/create', {
       method: 'POST',
       body: JSON.stringify(projectData),
-      token
     });
   },
   
-  async update(id, projectData, token) {
-    return fetchAPI(`/projects/${id}`, {
-      method: 'PUT',
+  async update(projectData) {
+    return fetchAPI('/projects/update', {
+      method: 'POST',
       body: JSON.stringify(projectData),
-      token
     });
   },
   
-  async delete(id, token) {
+  async delete(id) {
     return fetchAPI(`/projects/${id}`, {
       method: 'DELETE',
-      token
     });
   }
 };
@@ -100,11 +99,10 @@ export const projectsAPI = {
  * Assets API methods
  */
 export const assetsAPI = {
-  async getUploadUrl(fileName, fileType, projectId, token) {
+  async getUploadUrl(fileName, fileType, projectId) {
     return fetchAPI('/assets/create-upload-url', {
       method: 'POST',
       body: JSON.stringify({ fileName, fileType, projectId }),
-      token
     });
   },
 };

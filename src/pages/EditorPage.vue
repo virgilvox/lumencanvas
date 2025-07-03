@@ -99,7 +99,8 @@ function handleOpenCodeEditor(event) {
 }
 
 onMounted(() => {
-  projectStore.loadProject(props.id);
+  const initialData = history.state.project;
+  projectStore.loadProject(props.id, initialData);
   window.addEventListener('open-code-editor', handleOpenCodeEditor);
 });
 

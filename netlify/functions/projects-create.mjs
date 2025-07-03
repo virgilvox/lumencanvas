@@ -4,6 +4,18 @@ import { s3Client, bucketName } from "./utils/s3-client.js";
 import { nanoid } from "nanoid";
 
 export const handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+      },
+      body: ''
+    };
+  }
+
   try {
     const authorizationHeader = event.headers.authorization;
     if (!authorizationHeader) {
@@ -24,17 +36,37 @@ export const handler = async (event) => {
     const projectData = JSON.parse(event.body);
     const projectId = `proj_${nanoid()}`;
     const key = `${userId}/${projectId}/project.json`;
+    const now = new Date().toISOString();
 
-    // Add server-side metadata
-    projectData.id = projectId;
-    projectData.owner = userId;
-    projectData.createdAt = new Date().toISOString();
-    projectData.updatedAt = new Date().toISOString();
+    const newProject = {
+      id: projectId,
+      version: "1.0",
+      metadata: {
+        id: projectId,
+        name: projectData.name || 'Untitled Project',
+        description: projectData.description || '',
+        created: now,
+        modified: now,
+        author: userId,
+      },
+      canvas: {
+        width: projectData.width || 1280,
+        height: projectData.height || 720,
+        background: '#000000',
+        blendMode: 'normal',
+      },
+      layers: [],
+      assets: [],
+      history: {
+        commands: [],
+        currentIndex: -1,
+      }
+    };
 
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
-      Body: JSON.stringify(projectData),
+      Body: JSON.stringify(newProject),
       ContentType: "application/json",
     });
 
@@ -42,7 +74,8 @@ export const handler = async (event) => {
 
     return {
       statusCode: 201,
-      body: JSON.stringify(projectData),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newProject),
     };
   } catch (error) {
     console.error("Error creating project:", error);

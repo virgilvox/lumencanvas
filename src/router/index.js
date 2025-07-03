@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuth } from '@clerk/vue';
+import { watch } from 'vue';
 
 import LandingPage from '../pages/LandingPage.vue';
 import DashboardPage from '../pages/DashboardPage.vue';
@@ -42,9 +43,21 @@ const router = createRouter({
   routes,
 });
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresAuth) {
-    const { isSignedIn } = useAuth();
+    const { isSignedIn, isLoaded } = useAuth();
+
+    if (!isLoaded.value) {
+      await new Promise(resolve => {
+        const unwatch = watch(isLoaded, (loaded) => {
+          if (loaded) {
+            unwatch();
+            resolve();
+          }
+        });
+      });
+    }
+
     if (!isSignedIn.value) {
       return next({ name: 'sign-in', query: { redirect_url: to.fullPath } });
     }
