@@ -33,7 +33,7 @@
           
           <!-- Render each layer using LayerRenderer -->
           <LayerRenderer
-            v-for="layer in layers"
+            v-for="layer in [...layers].reverse()"
             :key="layer.id"
             :layer="layer"
             :canvas-width="projectStore.canvasWidth"
@@ -322,9 +322,6 @@ const drawSelectionOutline = (graphics) => {
     graphics.drawRect(layer.x - layer.width / 2, layer.y - layer.height / 2, layer.width, layer.height);
   }
 };
-
-watch(() => projectStore.canvasWidth, drawCanvasBoundingBox);
-watch(() => projectStore.canvasHeight, drawCanvasBoundingBox);
 
 </script>
 

@@ -100,9 +100,10 @@ function handleOpenCodeEditor(event) {
 }
 
 onMounted(() => {
+  const { yLayers, yCanvas } = useSync(props.id);
+  
   const initialData = history.state.project;
   projectStore.loadProject(props.id, initialData).then(() => {
-    const { yLayers, yCanvas } = useSync(props.id);
     
     // Initial sync of project data to Yjs doc
     yLayers.delete(0, yLayers.length);

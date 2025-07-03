@@ -185,11 +185,12 @@ export const commandFactory = {
     return {
       type: 'REORDER_LAYERS',
       execute() {
-        layersStore.reorderLayers(fromIndex, toIndex);
+        const [movedLayer] = layersStore.layers.splice(fromIndex, 1);
+        layersStore.layers.splice(toIndex, 0, movedLayer);
       },
       undo() {
-        // To undo, we swap the indices
-        layersStore.reorderLayers(toIndex, fromIndex);
+        const [movedLayer] = layersStore.layers.splice(toIndex, 1);
+        layersStore.layers.splice(fromIndex, 0, movedLayer);
       },
       timestamp: Date.now(),
       description: `Reorder layers`
