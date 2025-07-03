@@ -7,8 +7,10 @@ const instances = new Map();
 export function useSync(projectId) {
   if (!instances.has(projectId)) {
     const doc = new Y.Doc();
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${wsProtocol}://64.227.20.236:1234`;
     const provider = new WebsocketProvider(
-      'ws://64.227.20.236:1234',
+      wsUrl,
       projectId,
       doc
     );
