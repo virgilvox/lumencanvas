@@ -29,15 +29,9 @@ export const handler = async (event) => {
       };
     }
     
-    // Accept projectId via query string or as last path segment
-    let projectId = event.queryStringParameters?.id;
+    const { id: projectId } = JSON.parse(event.body);
 
-    if (!projectId) {
-      const pathSegments = (event.path || '').split('/').filter(Boolean);
-      projectId = pathSegments[pathSegments.length - 1];
-    }
-
-    if (!projectId || projectId === 'undefined' || projectId === 'projects-delete') {
+    if (!projectId || projectId === 'undefined') {
       return {
         statusCode: 400,
         headers: { ...corsHeaders },

@@ -111,8 +111,9 @@ export const projectsAPI = {
   },
   
   async delete(id) {
-    return fetchAPI(`/projects/${id}`, {
-      method: 'DELETE',
+    return fetchAPI('/projects/delete', {
+      method: 'POST',
+      body: JSON.stringify({ id }),
     });
   }
 };

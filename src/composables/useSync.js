@@ -10,14 +10,16 @@ export function useSync(projectId) {
     
     // Determine WebSocket URL based on environment
     const getWebSocketUrl = () => {
-      const hostname = window.location.hostname;
-      
-      // Development environment
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'ws://localhost:1234';
+      const customServer = import.meta.env.VITE_YJS_SERVER;
+      if (customServer) {
+        if (customServer.startsWith('ws://') || customServer.startsWith('wss://')) {
+          return customServer;
+        }
+        // Assume wss for custom domain if no protocol specified
+        return `wss://${customServer}`;
       }
       
-      // Production environment
+      // Default to production server for all environments as requested
       return 'wss://y.monolith.services';
     };
     

@@ -48,18 +48,18 @@
   method = "POST"
 
 [[redirects]]
+  from = "/api/projects/delete"
+  to = "/.netlify/functions/projects-delete"
+  status = 200
+  force = true
+  method = "POST"
+
+[[redirects]]
   from = "/api/projects/:id"
   to = "/.netlify/functions/projects-read?id=:id"
   status = 200
   force = true
   method = "GET"
-
-[[redirects]]
-  from = "/api/projects/:id"
-  to = "/.netlify/functions/projects-delete?id=:id"
-  status = 200
-  force = true
-  method = "DELETE"
 
 # SPA fallback rule
 [[redirects]]

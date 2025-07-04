@@ -115,7 +115,9 @@ function openProject(projectId) {
 async function deleteProject(projectId) {
   if (confirm('Are you sure you want to delete this project? This cannot be undone.')) {
     try {
-      await api.projects.delete(projectId);
+      console.log(`Attempting to delete project: ${projectId}`);
+      const response = await api.projects.delete(projectId);
+      console.log('Delete API response:', response);
       await fetchProjects(); // Refresh the list
     } catch (error) {
       console.error('Failed to delete project:', error);

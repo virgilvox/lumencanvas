@@ -57,19 +57,19 @@
 </head>
 <body>
     <h1>🔗 Yjs Server Connection Test</h1>
-    <p>Server: <strong>y.monolith.services</strong></p>
-    
-    <div id="status" class="status disconnected">
-        Status: Disconnected
-    </div>
     
     <div>
+        <input type="text" id="serverInput" placeholder="Server URL" value="wss://y.monolith.services" style="width: 300px;">
         <input type="text" id="roomInput" placeholder="Room ID" value="test-room">
         <button onclick="connect()">Connect</button>
         <button onclick="disconnect()">Disconnect</button>
         <button onclick="clearLog()">Clear Log</button>
     </div>
     
+    <div id="status" class="status disconnected">
+        Status: Disconnected
+    </div>
+
     <div>
         <input type="text" id="testInput" placeholder="Test message">
         <button onclick="sendTestMessage()">Send Test Message</button>
@@ -102,6 +102,7 @@
         
         function connect() {
             const roomId = document.getElementById('roomInput').value || 'test-room';
+            const serverUrl = document.getElementById('serverInput').value || 'wss://y.monolith.services';
             
             if (provider) {
                 provider.destroy();
@@ -111,23 +112,10 @@
             yDoc = new Y.Doc();
             yArray = yDoc.getArray('testArray');
             
-            // Determine WebSocket URL based on environment
-            const hostname = window.location.hostname;
-            let wsUrl;
-            
-            // Development environment
-            if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                wsUrl = 'ws://localhost:1234';
-            } else {
-                // Production environment
-                const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-                wsUrl = `${wsProtocol}://y.monolith.services`;
-            }
-            
-            log(`🔗 Connecting to ${wsUrl} (room: ${roomId})`);
+            log(`🔗 Connecting to ${serverUrl} (room: ${roomId})`);
             updateStatus('connecting', 'Connecting...');
             
-            provider = new yWebsocket.WebsocketProvider(wsUrl, roomId, yDoc);
+            provider = new yWebsocket.WebsocketProvider(serverUrl, roomId, yDoc);
             
             provider.on('status', (event) => {
                 log(`📡 Status: ${event.status}`);
