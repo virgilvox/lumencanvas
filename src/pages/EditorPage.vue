@@ -24,6 +24,8 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { watchThrottled } from '@vueuse/core';
+import * as Y from 'yjs';
 import EditorLayout from '../layouts/EditorLayout.vue';
 import Sidebar from '../components/Sidebar.vue';
 import CanvasStage from '../components/CanvasStage.vue';
@@ -101,26 +103,97 @@ function handleOpenCodeEditor(event) {
 
 onMounted(() => {
   const { yLayers, yCanvas } = useSync(props.id);
-  
+
   const initialData = history.state.project;
   projectStore.loadProject(props.id, initialData).then(() => {
     
-    // Initial sync of project data to Yjs doc
-    yLayers.delete(0, yLayers.length);
-    yLayers.insert(0, JSON.parse(JSON.stringify(layersStore.layers)));
-    yCanvas.set('width', projectStore.canvasWidth);
-    yCanvas.set('height', projectStore.canvasHeight);
-    yCanvas.set('background', projectStore.canvasBackground);
-
-    // Watch for changes in Pinia store and update Yjs doc
-    watch(() => layersStore.layers, (newLayers) => {
+    const fullSync = () => {
+      const localLayers = layersStore.layers;
       yLayers.delete(0, yLayers.length);
-      yLayers.insert(0, JSON.parse(JSON.stringify(newLayers)));
-    }, { deep: true });
+      const ymaps = JSON.parse(JSON.stringify(localLayers)).map(layer => {
+          const map = new Y.Map();
+          for (const key in layer) {
+              map.set(key, layer[key]);
+          }
+          return map;
+      });
+      yLayers.insert(0, ymaps);
+    };
 
-    watch(() => projectStore.canvasWidth, (width) => yCanvas.set('width', width));
-    watch(() => projectStore.canvasHeight, (height) => yCanvas.set('height', height));
-    watch(() => projectStore.canvasBackground, (bg) => yCanvas.set('background', bg));
+    const syncStateToYjs = () => {
+      yLayers.doc.transact(() => {
+        const localLayers = layersStore.layers;
+        let yjsLayersArray;
+        try {
+          yjsLayersArray = yLayers.toArray();
+        } catch (e) {
+          console.warn('Yjs data structure is invalid. Forcing full sync.', e);
+          fullSync();
+          return;
+        }
+
+        const localIds = localLayers.map(l => l.id);
+        const yjsIds = yjsLayersArray.map(l => l.id);
+
+        const hasStructuralChange = localIds.length !== yjsIds.length || 
+                                    localIds.some((id, index) => id !== yjsIds[index]);
+
+        if (hasStructuralChange) {
+          fullSync();
+        } else {
+          let hasInvalidYMap = false;
+          
+          localLayers.forEach((localLayer, index) => {
+            const yLayerMap = yLayers.get(index);
+            
+            if (typeof yLayerMap?.get !== 'function') {
+                if (!hasInvalidYMap) {
+                  console.warn(`Item at index ${index} is not a Y.Map. Forcing full sync.`);
+                  hasInvalidYMap = true;
+                }
+                return;
+            }
+            
+            const localLayerJSON = JSON.stringify(localLayer);
+            const yjsLayerJSON = JSON.stringify(yLayerMap.toJSON());
+
+            if (localLayerJSON !== yjsLayerJSON) {
+              for (const key in localLayer) {
+                if(JSON.stringify(yLayerMap.get(key)) !== JSON.stringify(localLayer[key])) {
+                  yLayerMap.set(key, localLayer[key]);
+                }
+              }
+            }
+          });
+          
+          if (hasInvalidYMap) {
+            fullSync();
+          }
+        }
+
+        // Sync canvas properties
+        yCanvas.set('width', projectStore.canvasWidth);
+        yCanvas.set('height', projectStore.canvasHeight);
+        yCanvas.set('background', projectStore.canvasBackground);
+      }, 'sync-state');
+    };
+
+    // Initial sync
+    syncStateToYjs();
+
+    // Watch for any changes in the layers store and sync them, but throttled
+    watchThrottled(
+      () => layersStore.layers, 
+      syncStateToYjs, 
+      { throttle: 50, deep: true } // Sync at most every 50ms (20fps)
+    );
+
+    // Watch for canvas changes (these are less frequent, so no debounce needed)
+    watch([() => projectStore.canvasWidth, () => projectStore.canvasHeight, () => projectStore.canvasBackground], () => {
+        yCanvas.set('width', projectStore.canvasWidth);
+        yCanvas.set('height', projectStore.canvasHeight);
+        yCanvas.set('background', projectStore.canvasBackground);
+    });
   });
 
   window.addEventListener('open-code-editor', handleOpenCodeEditor);

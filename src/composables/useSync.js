@@ -15,9 +15,17 @@ export function useSync(projectId) {
       doc
     );
     const connectionStatus = ref('disconnected');
+    const synced = ref(false);
 
     provider.on('status', event => {
       connectionStatus.value = event.status;
+    });
+    
+    provider.on('sync', event => {
+      synced.value = event.sync;
+      if(event.sync) {
+        connectionStatus.value = 'connected';
+      }
     });
 
     provider.on('error', event => {
@@ -31,6 +39,7 @@ export function useSync(projectId) {
       yLayers: doc.getArray('layers'),
       yCanvas: doc.getMap('canvas'),
       connectionStatus,
+      synced,
       refCount: 0,
       disconnect: () => {
         provider.destroy();

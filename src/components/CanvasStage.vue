@@ -31,10 +31,9 @@
             :layer="layer"
             :canvas-width="projectStore.canvasWidth"
             :canvas-height="projectStore.canvasHeight"
-            :selected="selectedLayers.includes(layer.id)"
+            :selected="selectedLayer && selectedLayer.id === layer.id"
             :is-edit-mode="true"
             @pointerdown="onLayerPointerDown($event, layer)"
-            @select="selectLayer"
           />
           
           <!-- Selection outline and warp handles -->
@@ -100,7 +99,29 @@ const panX = ref(0);
 const panY = ref(0);
 const isPanning = ref(false);
 const lastPanPosition = ref({ x: 0, y: 0 });
-const selectedLayers = ref([]);
+const isSpacebarDown = ref(false);
+
+const handleKeyDown = (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+    return;
+  }
+  if (e.code === 'Space' && !e.repeat) {
+    isSpacebarDown.value = true;
+    if (containerRef.value) {
+      containerRef.value.classList.add('pannable');
+    }
+    e.preventDefault();
+  }
+};
+
+const handleKeyUp = (e) => {
+  if (e.code === 'Space') {
+    isSpacebarDown.value = false;
+    if (containerRef.value && !isPanning.value) {
+      containerRef.value.classList.remove('pannable');
+    }
+  }
+};
 
 const urlLayers = computed(() => {
   return layersStore.layers.filter(layer => layer.type === layersStore.LayerTypes.URL && layer.visible);
@@ -108,12 +129,10 @@ const urlLayers = computed(() => {
 
 const onInit = (app) => {
   appRef.value = app;
+  // Make the entire stage interactive
+  app.stage.eventMode = 'static';
+  app.stage.hitArea = app.screen;
 };
-
-function selectLayer(layerId) {
-  selectedLayers.value = [layerId];
-  layersStore.selectLayer(layerId);
-}
 
 function getCanvasPosition(clientX, clientY) {
   const canvasRect = containerRef.value?.getBoundingClientRect();
@@ -147,51 +166,71 @@ function resetZoom() {
 
 function onWheel(event) {
   if (event.ctrlKey || event.metaKey) {
+    event.preventDefault();
     event.deltaY < 0 ? zoomIn() : zoomOut();
     return;
   }
-  if (event.shiftKey || event.buttons === 4) {
-    const factor = 10 / zoom.value;
-    if (event.deltaY !== 0) {
-      panY.value += event.deltaY > 0 ? -factor : factor;
-    }
-    if (event.deltaX !== 0) {
-      panX.value += event.deltaX > 0 ? -factor : factor;
-    }
+  
+  event.preventDefault();
+  panX.value -= event.deltaX;
+  panY.value -= event.deltaY;
+}
+
+function startPan(event) {
+  isPanning.value = true;
+  lastPanPosition.value = { x: event.clientX, y: event.clientY };
+  if (containerRef.value) {
+    containerRef.value.classList.add('panning');
   }
+
+  const onMouseMove = (moveEvent) => {
+    if (isPanning.value) {
+      const dx = moveEvent.clientX - lastPanPosition.value.x;
+      const dy = moveEvent.clientY - lastPanPosition.value.y;
+      panX.value += dx / zoom.value;
+      panY.value += dy / zoom.value;
+      lastPanPosition.value = { x: moveEvent.clientX, y: moveEvent.clientY };
+    }
+  };
+
+  const onMouseUp = () => {
+    isPanning.value = false;
+    if (containerRef.value) {
+      containerRef.value.classList.remove('panning');
+      if (!isSpacebarDown.value) {
+        containerRef.value.classList.remove('pannable');
+      }
+    }
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  };
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
 }
 
 function onCanvasMouseDown(event) {
   if (event.target !== containerRef.value && event.target !== appRef.value?.$el) {
     return;
   }
-  if (event.button === 1 || (event.button === 0 && event.shiftKey)) {
-    isPanning.value = true;
-    lastPanPosition.value = { x: event.clientX, y: event.clientY };
-    
-    const onMouseMove = (moveEvent) => {
-      if (isPanning.value) {
-        const dx = moveEvent.clientX - lastPanPosition.value.x;
-        const dy = moveEvent.clientY - lastPanPosition.value.y;
-        panX.value += dx / zoom.value;
-        panY.value += dy / zoom.value;
-        lastPanPosition.value = { x: moveEvent.clientX, y: moveEvent.clientY };
-      }
-    };
-    const onMouseUp = () => {
-      isPanning.value = false;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+  // Pan on middle-click OR spacebar+left-click
+  if (event.button === 1 || (isSpacebarDown.value && event.button === 0)) {
+    startPan(event);
+  } else if (!isSpacebarDown.value && event.button === 0) {
+    if (event.target === event.currentTarget) {
+      layersStore.clearSelection();
+    }
   }
 }
 
 const onLayerPointerDown = (event, layer) => {
+  event.data.originalEvent.stopPropagation();
+  if (isSpacebarDown.value) {
+    startPan(event.data.originalEvent);
+    return;
+  }
   try {
     layersStore.selectLayer(layer.id);
-    selectLayer(layer.id);
     const target = event.currentTarget || event.target;
     if (!target) return;
 
@@ -313,10 +352,14 @@ const finalizeWarpPointUpdate = (event) => {
 };
 
 onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keyup', handleKeyUp);
   window.addEventListener('warpHandlePointerUp', finalizeWarpPointUpdate);
 });
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown);
+  window.removeEventListener('keyup', handleKeyUp);
   window.removeEventListener('warpHandlePointerUp', finalizeWarpPointUpdate);
 });
 
@@ -372,6 +415,14 @@ const drawSelectionOutline = (graphics) => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.canvas-container.pannable {
+  cursor: grab;
+}
+
+.canvas-container.panning {
+  cursor: grabbing;
 }
 
 .canvas-wrapper {

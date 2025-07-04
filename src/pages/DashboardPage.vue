@@ -109,7 +109,7 @@ function handleProjectCreated(newProject) {
 }
 
 function openProject(projectId) {
-  router.push(`/editor/${projectId}`);
+  window.location.href = `/editor/${projectId}`;
 }
 
 async function deleteProject(projectId) {

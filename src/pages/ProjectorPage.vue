@@ -15,7 +15,7 @@
         >
           <container>
             <LayerRenderer
-              v-for="layer in layers"
+              v-for="layer in reversedLayers"
               :key="layer.id"
               :layer="layer"
             />
@@ -26,7 +26,7 @@
         <div class="iframe-overlay">
           <WarpedIframe
             v-for="layer in urlLayers"
-            :key="layer.id"
+            :key="`${layer.id}-${layer.content.url}-${layer.width}-${layer.height}`"
             :layer="layer"
             :canvas-width="canvasWidth"
             :canvas-height="canvasHeight"
@@ -49,6 +49,7 @@ import { Application } from 'vue3-pixi';
 import LayerRenderer from '../components/layers/LayerRenderer.vue';
 import WarpedIframe from '../components/layers/WarpedIframe.vue';
 import { useLayersStore } from '../store/layers';
+import api from '../services/api';
 
 const route = useRoute();
 const projectId = route.params.id;
@@ -65,8 +66,13 @@ const scale = ref(1);
 
 let yjs_instance = null;
 
+// This will make sure that yjs changes are applied reactively
+const yLayers = ref([]);
+
+const reversedLayers = computed(() => [...yLayers.value].reverse());
+
 const urlLayers = computed(() => {
-  return layers.value.filter(layer => layer.type === layersStore.LayerTypes.URL && layer.visible);
+  return reversedLayers.value.filter(layer => layer.type === layersStore.LayerTypes.URL && layer.visible);
 });
 
 const enterFullscreen = () => {
@@ -101,7 +107,7 @@ onMounted(() => {
   if (projectId) {
     yjs_instance = useSync(projectId);
 
-    const { yLayers, yCanvas, connectionStatus } = yjs_instance;
+    const { yLayers: yjsLayers, yCanvas, connectionStatus, synced } = yjs_instance;
 
     watch(connectionStatus, (status) => {
       if (status === 'disconnected' || status === 'error') {
@@ -111,38 +117,88 @@ onMounted(() => {
       }
     });
 
-    const updateLocalState = () => {
-      layers.value = yLayers.toArray();
-      canvasWidth.value = yCanvas.get('width') || 1280;
-      canvasHeight.value = yCanvas.get('height') || 720;
-      const bgColor = yCanvas.get('background') || '#000000';
-      canvasBackground.value = parseInt(bgColor.replace('#', '0x'));
+    const updateLocalState = (events) => {
+      // Ensure events is always an array
+      const eventArray = Array.isArray(events) ? events : [events];
+      
+      eventArray.forEach(event => {
+        if (event.target === yjsLayers) {
+          // Handle array changes (add/remove layers)
+          let index = 0;
+          event.changes.delta.forEach(op => {
+            if (op.retain) {
+              index += op.retain;
+            } else if (op.insert) {
+              // Using toJS to get plain objects, assuming they are new
+              const newItems = op.insert.map(item =>
+                item && typeof item.toJSON === 'function' ? item.toJSON() : item
+              );
+              yLayers.value.splice(index, 0, ...newItems);
+              index += newItems.length;
+            } else if (op.delete) {
+              yLayers.value.splice(index, op.delete);
+            }
+          });
+        } else if (event.target === yCanvas) {
+          // Handle canvas property changes
+          event.changes.keys.forEach((change, key) => {
+            if (key === 'width') canvasWidth.value = yCanvas.get('width');
+            if (key === 'height') canvasHeight.value = yCanvas.get('height');
+            if (key === 'background') {
+              const bgColor = yCanvas.get('background') || '#000000';
+              canvasBackground.value = parseInt(bgColor.replace('#', '0x'));
+            }
+          });
+        } else {
+            // This handles changes to individual layer objects within the array
+            const updatedLayer = (event.target && typeof event.target.toJSON === 'function')
+              ? event.target.toJSON()
+              : event.target;
+            const layerIndex = yLayers.value.findIndex(l => l.id === updatedLayer.id);
+            if (layerIndex > -1) {
+              Object.assign(yLayers.value[layerIndex], updatedLayer);
+            }
+        }
+      });
     };
     
-    yLayers.observe(updateLocalState);
+    yjsLayers.observeDeep(updateLocalState);
     yCanvas.observe(updateLocalState);
 
-    // Initial sync - if not connected after a short delay, fetch from API
-    setTimeout(() => {
-      if (connectionStatus.value !== 'connected') {
-        loadProjectFromApi();
-      } else {
-        updateLocalState();
+    // Initial sync using the 'synced' state
+    const stopWatchingSync = watch(synced, (isSynced) => {
+      if (isSynced) {
+        yLayers.value = yjsLayers.toArray();
+        canvasWidth.value = yCanvas.get('width') || 1280;
+        canvasHeight.value = yCanvas.get('height') || 720;
+        const bgColor = yCanvas.get('background') || '#000000';
+        canvasBackground.value = parseInt(bgColor.replace('#', '0x'));
+        
+        // Stop watching once synced to prevent re-loading on reconnects
+        stopWatchingSync();
       }
-    }, 1500);
+    }, { immediate: true });
+
+    // Fallback if not synced after a timeout
+    const syncTimeout = setTimeout(() => {
+      if(!synced.value) {
+        loadProjectFromApi();
+      }
+    }, 3000);
+
+    onUnmounted(() => {
+      clearTimeout(syncTimeout);
+    });
   }
 
   document.addEventListener('fullscreenchange', handleFullscreenChange);
-  
-  // Enter fullscreen on first click
-  projectorPageRef.value?.addEventListener('click', enterFullscreen, { once: true });
 });
 
 async function loadProjectFromApi() {
   try {
     const project = await api.projects.get(projectId);
     if (project) {
-      layers.value = project.layers || [];
+      yLayers.value = project.layers || [];
       canvasWidth.value = project.canvas?.width || 1280;
       canvasHeight.value = project.canvas?.height || 720;
       const bgColor = project.canvas?.background || '#000000';
@@ -178,6 +234,7 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   position: relative;
+  transform-origin: center center;
 }
 
 .projector-wrapper {

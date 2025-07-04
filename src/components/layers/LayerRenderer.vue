@@ -2,6 +2,7 @@
   <component
     :is="layerComponent"
     v-if="layer.visible && layerComponent"
+    :key="layerKey"
     :layer="layer"
     :blendMode="getBlendMode(layer.blendMode)"
     @request-edit="$emit('requestEdit', layer)"
@@ -23,6 +24,10 @@ const props = defineProps({
   layer: {
     type: Object,
     required: true
+  },
+  isEditMode: {
+    type: Boolean,
+    default: false,
   }
 });
 
@@ -41,6 +46,25 @@ const layerComponent = computed(() => {
   };
   
   return components[props.layer.type] || null;
+});
+
+const layerKey = computed(() => {
+  if (props.layer.type === LayerTypes.VIDEO && !props.isEditMode) {
+    // For video layers in the projector view, change the key only when a full
+    // re-render is actually required (e.g. the source or size changes). Avoid
+    // including position (x & y) so that simply moving the layer does **not**
+    // destroy and recreate the component, which caused videos to disappear.
+    return `${props.layer.id}-${props.layer.content.src}-${props.layer.width}-${props.layer.height}`;
+  }
+  
+  if (props.layer.type === LayerTypes.URL && !props.isEditMode) {
+    // For URL layers in the projector view, also avoid recreating iframes when just moving
+    // This prevents MutationObserver errors from browser extensions
+    return `${props.layer.id}-${props.layer.content.url}-${props.layer.width}-${props.layer.height}`;
+  }
+  
+  // For other layers, or in edit mode, just the ID is sufficient.
+  return props.layer.id;
 });
 
 function getBlendMode(mode) {
