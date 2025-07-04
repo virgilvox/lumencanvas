@@ -18,6 +18,7 @@ RUN chmod +x /usr/local/bin/entrypoint
 # Default settings
 ENV HOST=0.0.0.0 \
     PORT=1234 \
+    TLS_PORT=443 \
     ENABLE_TLS=false \
     TLS_CERT=/etc/ssl/certs/yjs-cert.pem \
     TLS_KEY=/etc/ssl/private/yjs-key.pem

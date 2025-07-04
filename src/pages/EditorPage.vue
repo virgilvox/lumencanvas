@@ -1,7 +1,7 @@
 <template>
   <EditorLayout>
     <template #header>
-      <TopBar />
+      <TopBar :collaboration-status="collaborationStatus" />
     </template>
     <template #sidebar>
       <Sidebar />
@@ -49,6 +49,13 @@ const projectStore = useProjectStore();
 // Code editor state
 const showCodeEditor = ref(false);
 const editingLayer = ref(null);
+
+// Collaboration status
+const collaborationStatus = ref({
+  connectionStatus: 'disconnected', // 'connected', 'connecting', 'disconnected'
+  synced: false,
+  connectedUsers: 0
+});
 
 const editorInitialCode = computed(() => {
   if (!editingLayer.value) return '';
@@ -102,7 +109,24 @@ function handleOpenCodeEditor(event) {
 }
 
 onMounted(() => {
-  const { yLayers, yCanvas } = useSync(props.id);
+  const { yLayers, yCanvas, provider, connectionStatus, synced } = useSync(props.id);
+
+  // Set up collaboration status tracking using existing sync status
+  watch(connectionStatus, (newStatus) => {
+    collaborationStatus.value.connectionStatus = newStatus;
+    if (newStatus === 'connected') {
+      console.log('🔗 Connected to collaboration server');
+    } else if (newStatus === 'disconnected') {
+      console.log('🔌 Disconnected from collaboration server');
+    }
+  }, { immediate: true });
+
+  watch(synced, (isSynced) => {
+    collaborationStatus.value.synced = isSynced;
+    if (isSynced) {
+      console.log('✅ Document synchronized');
+    }
+  }, { immediate: true });
 
   const initialData = history.state.project;
   projectStore.loadProject(props.id, initialData).then(() => {
@@ -181,18 +205,65 @@ onMounted(() => {
     // Initial sync
     syncStateToYjs();
 
-    // Watch for any changes in the layers store and sync them, but throttled
+    // Listen for incoming changes from other clients
+    let isUpdatingFromYjs = false;
+    
+    // Sync FROM Yjs TO local state when remote changes occur
+    const syncFromYjs = () => {
+      if (isUpdatingFromYjs) return; // Prevent infinite loops
+      
+      isUpdatingFromYjs = true;
+      
+      try {
+        // Sync layers from Yjs
+        const yjsLayers = yLayers.toArray().map(yLayer => yLayer.toJSON());
+        if (JSON.stringify(yjsLayers) !== JSON.stringify(layersStore.layers)) {
+          layersStore.importLayers(yjsLayers);
+        }
+        
+        // Sync canvas properties from Yjs
+        const yjsWidth = yCanvas.get('width');
+        const yjsHeight = yCanvas.get('height');
+        const yjsBackground = yCanvas.get('background');
+        
+        if (yjsWidth && yjsWidth !== projectStore.canvasWidth) {
+          projectStore.setCanvasSize(yjsWidth, projectStore.canvasHeight);
+        }
+        if (yjsHeight && yjsHeight !== projectStore.canvasHeight) {
+          projectStore.setCanvasSize(projectStore.canvasWidth, yjsHeight);
+        }
+        if (yjsBackground && yjsBackground !== projectStore.canvasBackground) {
+          projectStore.setCanvasBackground(yjsBackground);
+        }
+      } catch (error) {
+        console.warn('Error syncing from Yjs:', error);
+      } finally {
+        isUpdatingFromYjs = false;
+      }
+    };
+
+    // Listen for changes from remote clients
+    yLayers.observe(syncFromYjs);
+    yCanvas.observe(syncFromYjs);
+
+    // Watch for local changes and sync them to Yjs, but throttled
     watchThrottled(
       () => layersStore.layers, 
-      syncStateToYjs, 
+      () => {
+        if (!isUpdatingFromYjs) { // Don't sync back changes that came from Yjs
+          syncStateToYjs();
+        }
+      }, 
       { throttle: 50, deep: true } // Sync at most every 50ms (20fps)
     );
 
     // Watch for canvas changes (these are less frequent, so no debounce needed)
     watch([() => projectStore.canvasWidth, () => projectStore.canvasHeight, () => projectStore.canvasBackground], () => {
+      if (!isUpdatingFromYjs) { // Don't sync back changes that came from Yjs
         yCanvas.set('width', projectStore.canvasWidth);
         yCanvas.set('height', projectStore.canvasHeight);
         yCanvas.set('background', projectStore.canvasBackground);
+      }
     });
   });
 

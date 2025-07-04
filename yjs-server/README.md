@@ -12,33 +12,49 @@ A Docker-based Yjs WebSocket server with optional TLS support for real-time coll
 
 ## Quick Start
 
-### Basic Usage (HTTP/WS)
+### Development (HTTP/WS on port 1234)
 
 ```bash
-# Build the Docker image
-docker build -t yjs-server .
+# Using Docker Compose (recommended)
+docker-compose up yjs-server-dev
 
-# Run without TLS (plain WebSocket)
+# Or manually with Docker
+docker build -t yjs-server .
 docker run -p 1234:1234 yjs-server
 ```
 
-Your Yjs server will be available at `ws://localhost:1234`
+Your development Yjs server will be available at `ws://localhost:1234`
 
-### With TLS (HTTPS/WSS)
+### Production with Direct TLS (HTTPS/WSS on port 443)
 
 ```bash
-# Run with TLS support
+# Using Docker Compose with your SSL certificates
+docker-compose --profile production up yjs-server-prod
+
+# Or manually with Docker
 docker run \
   -p 443:443 \
-  -v /path/to/your/certs:/certs \
-  -e TLS_ENABLED=true \
-  -e TLS_CERT_PATH=/certs/cert.pem \
-  -e TLS_KEY_PATH=/certs/key.pem \
+  -v /path/to/your/ssl/certs:/certs:ro \
+  -e ENABLE_TLS=true \
+  -e TLS_CERT=/certs/cert.pem \
+  -e TLS_KEY=/certs/key.pem \
   -e TLS_PORT=443 \
   yjs-server
 ```
 
 Your secure Yjs server will be available at `wss://yourdomain.com`
+
+### Production Behind Reverse Proxy (Recommended)
+
+For production, it's often better to use a reverse proxy (Nginx, Traefik, Cloudflare) for SSL termination:
+
+```bash
+# Using Docker Compose
+docker-compose --profile proxy up yjs-server-proxy
+
+# The reverse proxy handles SSL and forwards to ws://container:1234
+# Your clients connect to wss://yourdomain.com (handled by reverse proxy)
+```
 
 ## Environment Variables
 
@@ -46,10 +62,10 @@ Your secure Yjs server will be available at `wss://yourdomain.com`
 |----------|---------|-------------|
 | `HOST` | `0.0.0.0` | Host address to bind to |
 | `PORT` | `1234` | Port for non-TLS connections |
-| `TLS_ENABLED` | `false` | Enable TLS/SSL support |
+| `ENABLE_TLS` | `false` | Enable TLS/SSL support |
 | `TLS_PORT` | `443` | Port for TLS connections |
-| `TLS_CERT_PATH` | `/certs/cert.pem` | Path to TLS certificate |
-| `TLS_KEY_PATH` | `/certs/key.pem` | Path to TLS private key |
+| `TLS_CERT` | `/etc/ssl/certs/yjs-cert.pem` | Path to TLS certificate |
+| `TLS_KEY` | `/etc/ssl/private/yjs-key.pem` | Path to TLS private key |
 
 ## Testing the Server
 
@@ -104,29 +120,38 @@ provider.on('status', event => {
 
 ## Deployment Options
 
-### Option 1: Direct Docker Deployment
+### Option 1: DigitalOcean Droplet with Reverse Proxy (Recommended)
 
-Build and run the container directly as shown in the Quick Start section.
-
-### Option 2: Behind a Reverse Proxy
-
-For automatic SSL certificate management, deploy behind a reverse proxy like Nginx or Traefik:
+Since you're running at `y.monolith.services`, you likely have a reverse proxy (Nginx/Traefik) handling SSL:
 
 ```bash
-# Run without built-in TLS (let reverse proxy handle SSL)
-docker run -p 1234:1234 yjs-server
+# On your DigitalOcean droplet
+git clone <your-repo>
+cd lumencanvas/yjs-server
+
+# Build and run behind reverse proxy
+docker-compose --profile proxy up -d yjs-server-proxy
+
+# Or manually
+docker build -t yjs-server .
+docker run -d -p 1234:1234 --name yjs-server yjs-server
 ```
 
-Then configure your reverse proxy to:
-- Handle SSL termination
-- Proxy WebSocket connections to the container
-- Manage certificate renewal (Let's Encrypt, etc.)
+Configure your reverse proxy to forward WSS connections:
+- Client connects to: `wss://y.monolith.services`
+- Proxy forwards to: `ws://localhost:1234`
 
-### Option 3: Cloud Deployment
+### Option 2: Direct TLS (if you want container to handle SSL)
 
-Deploy to cloud platforms like:
+```bash
+# Place your SSL certificates in /etc/ssl/certs/
+docker-compose --profile production up -d yjs-server-prod
+```
+
+### Option 3: Cloud Platforms
+
+Deploy to platforms with automatic SSL:
 - **Railway**: Easy deployment with automatic SSL
-- **Heroku**: Add websocket support in dyno
 - **DigitalOcean App Platform**: Built-in load balancing
 - **AWS ECS/Fargate**: Scalable container deployment
 
@@ -147,13 +172,27 @@ To integrate this Yjs server with your LumenCanvas application:
    
    export function useCollaboration(documentId) {
      const doc = new Y.Doc();
-     const provider = new WebsocketProvider(
-       process.env.NODE_ENV === 'production' 
-         ? 'wss://your-yjs-server.com' 
-         : 'ws://localhost:1234',
-       documentId,
-       doc
-     );
+     
+     // Determine server URL based on environment
+     const getServerUrl = () => {
+       if (typeof window !== 'undefined') {
+         // Browser environment - use same protocol as page
+         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+         const host = window.location.hostname;
+         
+         if (host === 'localhost' || host === '127.0.0.1') {
+           return 'ws://localhost:1234';
+         } else {
+           return `${protocol}//${host === 'your-domain.com' ? 'y.monolith.services' : host}`;
+         }
+       }
+       // Fallback for SSR
+       return process.env.NODE_ENV === 'production' 
+         ? 'wss://y.monolith.services' 
+         : 'ws://localhost:1234';
+     };
+     
+     const provider = new WebsocketProvider(getServerUrl(), documentId, doc);
      
      return { doc, provider };
    }
@@ -178,7 +217,29 @@ To integrate this Yjs server with your LumenCanvas application:
 
 ## Troubleshooting
 
-### Connection Issues
+### Common Issues
+
+#### "npm error could not determine executable to run"
+
+This error typically occurs when the Docker container can't find the y-websocket executable. To fix:
+
+1. **Rebuild the Docker image** to ensure the latest fixes are applied:
+   ```bash
+   docker build -t yjs-server . --no-cache
+   ```
+
+2. **Stop any running containers** and restart:
+   ```bash
+   docker stop $(docker ps -q --filter ancestor=yjs-server)
+   docker run -p 1234:1234 yjs-server
+   ```
+
+3. **Check the logs** for specific error details:
+   ```bash
+   docker logs <container-id>
+   ```
+
+#### Connection Issues
 
 1. **Check firewall settings** - Ensure ports 1234 (or your custom port) are open
 2. **Verify WebSocket support** - Some corporate networks block WebSocket connections
@@ -212,4 +273,96 @@ When contributing to the Yjs server setup:
 2. Ensure Docker builds successfully
 3. Verify WebSocket connections work properly
 4. Update documentation for any new features
-5. Test integration with the main LumenCanvas application 
+5. Test integration with the main LumenCanvas application
+
+## DigitalOcean Deployment Guide
+
+### Prerequisites
+- DigitalOcean droplet with Docker installed
+- Domain pointing to your droplet (y.monolith.services)
+- Reverse proxy (Nginx/Traefik) handling SSL
+
+### Step-by-Step Deployment
+
+1. **SSH into your droplet:**
+   ```bash
+   ssh root@your-droplet-ip
+   ```
+
+2. **Navigate to your project and update:**
+   ```bash
+   cd /path/to/lumencanvas
+   git pull origin main
+   ```
+
+3. **Stop the old container (if running):**
+   ```bash
+   docker stop yjs-server 2>/dev/null || true
+   docker rm yjs-server 2>/dev/null || true
+   ```
+
+4. **Build and start the new server:**
+   ```bash
+   cd yjs-server
+   docker build -t yjs-server . --no-cache
+   docker run -d \
+     --name yjs-server \
+     --restart unless-stopped \
+     -p 127.0.0.1:1234:1234 \
+     yjs-server
+   ```
+
+5. **Verify it's running:**
+   ```bash
+   docker logs yjs-server
+   curl -I http://localhost:1234
+   ```
+
+6. **Update your reverse proxy config** to forward WSS to the container:
+   
+   **For Nginx:**
+   ```nginx
+   # Add to your nginx config
+   location /yjs/ {
+       proxy_pass http://127.0.0.1:1234/;
+       proxy_http_version 1.1;
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection "upgrade";
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+   }
+   ```
+
+7. **Test the connection:**
+   ```bash
+   # From your local machine
+   wscat -c wss://y.monolith.services/yjs/
+   ```
+
+### Monitoring & Logs
+
+```bash
+# Check container status
+docker ps | grep yjs-server
+
+# View logs
+docker logs yjs-server
+
+# Follow logs in real-time
+docker logs -f yjs-server
+
+# Check resource usage
+docker stats yjs-server
+```
+
+### Backup & Restore
+
+```bash
+# Backup container image
+docker save yjs-server | gzip > yjs-server-backup.tar.gz
+
+# Restore from backup
+gunzip -c yjs-server-backup.tar.gz | docker load
+``` 

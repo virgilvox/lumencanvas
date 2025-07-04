@@ -1,43 +1,50 @@
 version: '3.8'
 
 services:
-  yjs-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  # Development configuration (HTTP/WS)
+  yjs-server-dev:
+    build: .
     ports:
-      - "1234:1234"  # WebSocket port
-      - "443:443"    # HTTPS/WSS port
+      - "1234:1234"
     environment:
       - HOST=0.0.0.0
       - PORT=1234
-      - TLS_ENABLED=false
-      - TLS_PORT=443
-      - TLS_CERT_PATH=/certs/cert.pem
-      - TLS_KEY_PATH=/certs/key.pem
-      # Uncomment for verbose logging
-      # - DEBUG=y*
-    volumes:
-      # Mount certificate directory if using TLS
-      # - ./certs:/certs:ro
-      # Mount for development (uncomment to enable hot reloading)
-      # - .:/app
+      - ENABLE_TLS=false
     restart: unless-stopped
-    # Uncomment for production deployment
-    # deploy:
-    #   resources:
-    #     limits:
-    #       memory: 512M
-    #     reservations:
-    #       memory: 256M
+    container_name: yjs-server-dev
 
-  # Optional: Redis for persistence (uncomment if needed)
-  # redis:
-  #   image: redis:7-alpine
-  #   restart: unless-stopped
-  #   volumes:
-  #     - redis_data:/data
-  #   command: redis-server --appendonly yes
+  # Production configuration (HTTPS/WSS)
+  yjs-server-prod:
+    build: .
+    ports:
+      - "443:443"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=1234
+      - TLS_PORT=443
+      - ENABLE_TLS=true
+      - TLS_CERT=/certs/cert.pem
+      - TLS_KEY=/certs/key.pem
+    volumes:
+      - /path/to/your/ssl/certs:/certs:ro
+    restart: unless-stopped
+    container_name: yjs-server-prod
+    profiles:
+      - production
+
+  # Behind reverse proxy (recommended for production)
+  yjs-server-proxy:
+    build: .
+    ports:
+      - "1234:1234"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=1234
+      - ENABLE_TLS=false
+    restart: unless-stopped
+    container_name: yjs-server-proxy
+    profiles:
+      - proxy
 
 # Uncomment if using Redis
 # volumes:

@@ -69,12 +69,30 @@ The application will be available at `http://localhost:5173` (or your configured
 
 ## Collaboration Server
 
-The Yjs collaboration server enables real-time collaborative editing. See the [`yjs-server/README.md`](./yjs-server/README.md) for detailed setup instructions including:
+The Yjs collaboration server enables real-time collaborative editing. A production server is currently running at `y.monolith.services`. See the [`yjs-server/README.md`](./yjs-server/README.md) for detailed setup instructions including:
 
 - Local development setup
 - Production deployment with TLS
 - Environment configuration
 - Testing and troubleshooting
+
+### Testing Collaboration
+
+To test the collaboration server connection:
+
+1. **Using the web test interface:**
+   Open `test-yjs-connection.html` in your browser to test WebSocket connectivity
+
+2. **Using the Node.js test script:**
+   ```bash
+   cd yjs-server
+   node test-server.js ws://y.monolith.services
+   ```
+
+3. **In the application:**
+   - Open multiple browser windows to the same project
+   - Changes should sync in real-time between all connected clients
+   - Check the browser console for connection status logs
 
 ## Project Structure
 

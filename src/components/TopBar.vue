@@ -16,6 +16,18 @@
         <button class="tool-button" @click="togglePreview">Preview (P)</button>
       </div>
       
+      <!-- Collaboration Status -->
+      <div class="tool-group collaboration-status" v-if="collaborationStatus">
+        <div 
+          class="collab-indicator" 
+          :class="collaborationStatus.connectionStatus"
+          :title="`Collaboration: ${collaborationStatus.connectionStatus} - ${collaborationStatus.synced ? 'Synced' : 'Syncing...'}`"
+        >
+          <div class="collab-dot"></div>
+          <span class="collab-text">{{ collaborationStatus.connectionStatus === 'connected' ? 'Live' : 'Offline' }}</span>
+        </div>
+      </div>
+      
       <div class="tool-group">
         <button 
           class="tool-button"
@@ -172,6 +184,14 @@ import PreviewModal from './PreviewModal.vue';
 import BackupManager from './BackupManager.vue';
 import ProjectSettingsModal from './ProjectSettingsModal.vue';
 import { SignedIn, SignedOut, UserButton } from '@clerk/vue';
+
+// Props
+const props = defineProps({
+  collaborationStatus: {
+    type: Object,
+    default: null
+  }
+});
 
 const layersStore = useLayersStore();
 const projectStore = useProjectStore();
@@ -768,6 +788,67 @@ function togglePreview() {
 
 .save-btn:hover {
   background-color: #4acbff;
+}
+
+/* Collaboration Status Indicator */
+.collaboration-status {
+  margin-left: 12px;
+}
+
+.collab-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.collab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #6b7280;
+  animation: pulse 2s infinite;
+}
+
+.collab-indicator.connected .collab-dot {
+  background-color: #10b981;
+}
+
+.collab-indicator.connecting .collab-dot {
+  background-color: #f59e0b;
+}
+
+.collab-indicator.disconnected .collab-dot {
+  background-color: #ef4444;
+}
+
+.collab-text {
+  color: #d1d5db;
+  font-size: 11px;
+}
+
+.collab-indicator.connected .collab-text {
+  color: #10b981;
+}
+
+.collab-indicator.connecting .collab-text {
+  color: #f59e0b;
+}
+
+.collab-indicator.disconnected .collab-text {
+  color: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* Transitions */

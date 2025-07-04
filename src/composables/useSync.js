@@ -7,8 +7,24 @@ const instances = new Map();
 export function useSync(projectId) {
   if (!instances.has(projectId)) {
     const doc = new Y.Doc();
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${wsProtocol}://64.227.20.236:1234`;
+    
+    // Determine WebSocket URL based on environment
+    const getWebSocketUrl = () => {
+      const hostname = window.location.hostname;
+      
+      // Development environment
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'ws://localhost:1234';
+      }
+      
+      // Production environment
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      return `${protocol}://y.monolith.services`;
+    };
+    
+    const wsUrl = getWebSocketUrl();
+    console.log(`🔗 Connecting to Yjs server: ${wsUrl} (room: ${projectId})`);
+    
     const provider = new WebsocketProvider(
       wsUrl,
       projectId,
@@ -19,18 +35,28 @@ export function useSync(projectId) {
 
     provider.on('status', event => {
       connectionStatus.value = event.status;
+      console.log(`🔗 Connection status: ${event.status}`);
     });
     
     provider.on('sync', event => {
       synced.value = event.sync;
       if(event.sync) {
         connectionStatus.value = 'connected';
+        console.log('✅ Document synchronized');
       }
     });
 
     provider.on('error', event => {
-      console.error('WebSocket error:', event);
+      console.error('❌ WebSocket error:', event);
       connectionStatus.value = 'error';
+    });
+
+    provider.on('connection-close', event => {
+      console.log('🔌 Connection closed:', event);
+    });
+
+    provider.on('connection-error', event => {
+      console.error('❌ Connection error:', event);
     });
 
     instances.set(projectId, {

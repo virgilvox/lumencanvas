@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yjs Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected { background-color: #10b981; color: white; }
+        .connecting { background-color: #f59e0b; color: white; }
+        .disconnected { background-color: #ef4444; color: white; }
+        .log {
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        button {
+            background-color: #12B0FF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #4acbff;
+        }
+        input {
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 Yjs Server Connection Test</h1>
+    <p>Server: <strong>y.monolith.services</strong></p>
+    
+    <div id="status" class="status disconnected">
+        Status: Disconnected
+    </div>
+    
+    <div>
+        <input type="text" id="roomInput" placeholder="Room ID" value="test-room">
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div>
+        <input type="text" id="testInput" placeholder="Test message">
+        <button onclick="sendTestMessage()">Send Test Message</button>
+    </div>
+    
+    <div id="log" class="log">
+        <div>📋 Connection log will appear here...</div>
+    </div>
+
+    <script src="https://unpkg.com/yjs@^13.6.0/dist/yjs.js"></script>
+    <script src="https://unpkg.com/y-websocket@^3.0.0/dist/y-websocket.js"></script>
+    <script>
+        let provider = null;
+        let yDoc = null;
+        let yArray = null;
+        let currentRoom = '';
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(status, message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${status}`;
+            statusDiv.textContent = `Status: ${message}`;
+        }
+        
+        function connect() {
+            const roomId = document.getElementById('roomInput').value || 'test-room';
+            
+            if (provider) {
+                provider.destroy();
+            }
+            
+            currentRoom = roomId;
+            yDoc = new Y.Doc();
+            yArray = yDoc.getArray('testArray');
+            
+            // Determine WebSocket URL based on environment
+            const hostname = window.location.hostname;
+            let wsUrl;
+            
+            // Development environment
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                wsUrl = 'ws://localhost:1234';
+            } else {
+                // Production environment
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+                wsUrl = `${wsProtocol}://y.monolith.services`;
+            }
+            
+            log(`🔗 Connecting to ${wsUrl} (room: ${roomId})`);
+            updateStatus('connecting', 'Connecting...');
+            
+            provider = new yWebsocket.WebsocketProvider(wsUrl, roomId, yDoc);
+            
+            provider.on('status', (event) => {
+                log(`📡 Status: ${event.status}`);
+                updateStatus(event.status, event.status.charAt(0).toUpperCase() + event.status.slice(1));
+            });
+            
+            provider.on('sync', (event) => {
+                log(`✅ Sync: ${event.sync}`);
+                if (event.sync) {
+                    updateStatus('connected', 'Connected & Synced');
+                }
+            });
+            
+            provider.on('error', (event) => {
+                log(`❌ Error: ${event.error || event}`);
+                updateStatus('disconnected', 'Error');
+            });
+            
+            // Listen for changes to the shared array
+            yArray.observe(() => {
+                log(`📝 Array updated: ${JSON.stringify(yArray.toArray())}`);
+            });
+            
+            // Test initial connection
+            setTimeout(() => {
+                if (provider.ws && provider.ws.readyState === WebSocket.OPEN) {
+                    log('🎉 WebSocket connection established!');
+                    sendTestMessage('Connected successfully!');
+                } else {
+                    log('⚠️ WebSocket connection not established after timeout');
+                }
+            }, 2000);
+        }
+        
+        function disconnect() {
+            if (provider) {
+                log('🔌 Disconnecting...');
+                provider.destroy();
+                provider = null;
+                yDoc = null;
+                yArray = null;
+                updateStatus('disconnected', 'Disconnected');
+            }
+        }
+        
+        function sendTestMessage(message) {
+            if (!yArray || !provider) {
+                log('❌ Not connected to server');
+                return;
+            }
+            
+            const testMessage = message || document.getElementById('testInput').value || 'Test message';
+            const messageObj = {
+                text: testMessage,
+                timestamp: new Date().toISOString(),
+                room: currentRoom
+            };
+            
+            yArray.push([messageObj]);
+            log(`📤 Sent: ${testMessage}`);
+            document.getElementById('testInput').value = '';
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '<div>📋 Connection log cleared...</div>';
+        }
+        
+        // Auto-connect on page load
+        window.onload = () => {
+            log('🚀 Yjs Connection Test loaded');
+            log('Click "Connect" to test the server connection');
+        };
+    </script>
+</body>
+</html> 
