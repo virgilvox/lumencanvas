@@ -29,13 +29,20 @@ export const handler = async (event) => {
       };
     }
     
-    const { id: projectId } = event.queryStringParameters;
-    if (!projectId || projectId === 'undefined') {
-        return {
-            statusCode: 400,
-            headers: { ...corsHeaders },
-            body: JSON.stringify({ error: 'Project ID is required.'})
-        };
+    // Accept projectId via query string or as last path segment
+    let projectId = event.queryStringParameters?.id;
+
+    if (!projectId) {
+      const pathSegments = (event.path || '').split('/').filter(Boolean);
+      projectId = pathSegments[pathSegments.length - 1];
+    }
+
+    if (!projectId || projectId === 'undefined' || projectId === 'projects-delete') {
+      return {
+        statusCode: 400,
+        headers: { ...corsHeaders },
+        body: JSON.stringify({ error: 'Project ID is required.'})
+      };
     }
 
     const prefix = `${userId}/${projectId}/`;

@@ -38,13 +38,20 @@ export const handler = async (event) => {
       };
     }
     
-    const { id: projectId } = event.queryStringParameters;
+    // Accept projectId via query string (e.g., ?id=123) or as the last segment of the request path
+    let projectId = event.queryStringParameters?.id;
+
     if (!projectId) {
-        return {
-            statusCode: 400,
-            headers: { ...corsHeaders },
-            body: JSON.stringify({ error: 'Project ID is required.'})
-        };
+      const pathSegments = (event.path || '').split('/').filter(Boolean);
+      projectId = pathSegments[pathSegments.length - 1];
+    }
+
+    if (!projectId || projectId === 'projects-read') {
+      return {
+        statusCode: 400,
+        headers: { ...corsHeaders },
+        body: JSON.stringify({ error: 'Project ID is required.'})
+      };
     }
 
     const key = `${userId}/${projectId}/project.json`;
