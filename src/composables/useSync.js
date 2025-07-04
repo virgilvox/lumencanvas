@@ -18,8 +18,7 @@ export function useSync(projectId) {
       }
       
       // Production environment
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      return `${protocol}://y.monolith.services`;
+      return 'wss://y.monolith.services';
     };
     
     const wsUrl = getWebSocketUrl();
