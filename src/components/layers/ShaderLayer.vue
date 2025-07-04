@@ -79,18 +79,26 @@ function updateGeometry() {
     vertices = points.flatMap(p => [p.x, p.y]);
   } else {
     // Create default vertices based on layer position and size
-    const x = props.layer.x || 0;
-    const y = props.layer.y || 0;
-    const width = props.layer.width || 200;
-    const height = props.layer.height || 200;
-    
-    // Calculate corners properly based on center position
-    vertices = [
-      x - width/2, y - height/2,  // top-left
-      x + width/2, y - height/2,  // top-right
-      x + width/2, y + height/2,  // bottom-right
-      x - width/2, y + height/2   // bottom-left
+    const { x = 0, y = 0, width = 0, height = 0, scale = {x: 1, y: 1}, rotation = 0 } = props.layer;
+    const w = width * (scale?.x || 1);
+    const h = height * (scale?.y || 1);
+
+    const corners = [
+        { x: -w / 2, y: -h / 2 }, { x:  w / 2, y: -h / 2 },
+        { x:  w / 2, y:  h / 2 }, { x: -w / 2, y:  h / 2 }
     ];
+
+    const rad = rotation * (Math.PI / 180);
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    const transformedCorners = corners.map(p => {
+        const rotatedX = p.x * cos - p.y * sin;
+        const rotatedY = p.x * sin + p.y * cos;
+        return { x: rotatedX + x, y: rotatedY + y };
+    });
+
+    vertices = transformedCorners.flatMap(p => [p.x, p.y]);
   }
   
   // Create or update geometry
@@ -139,6 +147,6 @@ onUnmounted(() => {
 });
 
 watch(() => props.layer.content.code, updateShader);
-watch(() => props.layer.warp?.points, updateGeometry, { deep: true });
-watch(() => [props.layer.x, props.layer.y, props.layer.width, props.layer.height], updateGeometry);
+watch(() => props.layer.warp, updateGeometry, { deep: true });
+watch(() => [props.layer.x, props.layer.y, props.layer.width, props.layer.height, props.layer.scale, props.layer.rotation], updateGeometry, { deep: true });
 </script>

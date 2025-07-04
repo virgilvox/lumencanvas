@@ -46,37 +46,35 @@
         <div class="property">
           <label>Position</label>
           <div class="input-group">
-            <input type="number" v-model="posX" placeholder="X" @focus="captureOriginalState(['x', 'y'])" @change="updatePosition"/>
-            <input type="number" v-model="posY" placeholder="Y" @focus="captureOriginalState(['x', 'y'])" @change="updatePosition"/>
+            <input type="number" v-model.lazy="posX" placeholder="X" @change="updatePosition"/>
+            <input type="number" v-model.lazy="posY" placeholder="Y" @change="updatePosition"/>
           </div>
         </div>
 
         <div class="property">
           <label>Scale</label>
-          <div class="input-group">
-            <input type="number" v-model="scaleX" placeholder="X" step="0.1" @focus="captureOriginalState(['scale'])" @change="updateScale"/>
-            <input type="number" v-model="scaleY" placeholder="Y" step="0.1" @focus="captureOriginalState(['scale'])" @change="updateScale"/>
-          </div>
+          <input type="number" v-model.lazy="scale" placeholder="Uniform Scale" step="0.1" @change="updateScale"/>
         </div>
 
         <div class="property">
           <label>Rotation</label>
-          <input type="number" v-model="rotation" @focus="captureOriginalState(['rotation'])" @change="updateRotation"/>
+          <input type="number" v-model.lazy="rotation" @change="updateRotation"/>
         </div>
 
         <!-- Appearance properties -->
         <div class="property">
           <label>Opacity</label>
-          <input 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.01" 
-            v-model="opacity" 
-            @focus="captureOriginalState(['opacity'])"
-            @change="updateOpacity"
-          />
-          <span>{{ Math.round(opacity * 100) }}%</span>
+          <div class="input-group-vertical">
+            <input 
+              type="range" 
+              min="0" 
+              max="1" 
+              step="0.01" 
+              v-model.lazy="opacity" 
+              @change="updateOpacity"
+            />
+            <span>{{ Math.round(opacity * 100) }}%</span>
+          </div>
         </div>
 
         <div class="property">
@@ -191,8 +189,7 @@ const { LayerTypes, BlendModes, updateLayer, clearSelection } = layersStore;
 // Input values for properties (to avoid direct binding)
 const posX = ref(0);
 const posY = ref(0);
-const scaleX = ref(1);
-const scaleY = ref(1);
+const scale = ref(1);
 const rotation = ref(0);
 const opacity = ref(1);
 const blendMode = ref('normal');
@@ -215,13 +212,11 @@ function toggleCollapse() {
 
 function captureOriginalState(properties) {
   if (!selectedLayer.value) return;
-  
+  originalStateForUndo.value = {}; // Clear previous state
   properties.forEach(prop => {
-    // A simple deep copy for objects like 'scale'
-    if (typeof selectedLayer.value[prop] === 'object' && selectedLayer.value[prop] !== null) {
-      originalStateForUndo.value[prop] = JSON.parse(JSON.stringify(selectedLayer.value[prop]));
-    } else {
-      originalStateForUndo.value[prop] = selectedLayer.value[prop];
+    const layer = selectedLayer.value;
+    if (layer && typeof layer[prop] !== 'undefined') {
+      originalStateForUndo.value[prop] = JSON.parse(JSON.stringify(layer[prop]));
     }
   });
 }
@@ -231,8 +226,7 @@ watch(selectedLayer, (layer) => {
   if (layer) {
     posX.value = layer.x;
     posY.value = layer.y;
-    scaleX.value = layer.scale?.x || 1;
-    scaleY.value = layer.scale?.y || 1;
+    scale.value = (layer.scale?.x === layer.scale?.y) ? layer.scale.x : 1;
     rotation.value = layer.rotation || 0;
     opacity.value = layer.opacity;
     blendMode.value = layer.blendMode || 'normal';
@@ -244,18 +238,16 @@ watch(selectedLayer, (layer) => {
 watch(() => [
   selectedLayer.value?.x,
   selectedLayer.value?.y,
-  selectedLayer.value?.scale?.x,
-  selectedLayer.value?.scale?.y,
+  selectedLayer.value?.scale,
   selectedLayer.value?.rotation,
   selectedLayer.value?.opacity,
   selectedLayer.value?.blendMode,
   selectedLayer.value?.visible
-], ([x, y, scaleXVal, scaleYVal, rot, op, blend, vis]) => {
+], ([x, y, newScale, rot, op, blend, vis]) => {
   if (selectedLayer.value) {
     posX.value = x;
     posY.value = y;
-    scaleX.value = scaleXVal || 1;
-    scaleY.value = scaleYVal || 1;
+    scale.value = newScale?.x || 1;
     rotation.value = rot || 0;
     opacity.value = op;
     blendMode.value = blend || 'normal';
@@ -265,66 +257,48 @@ watch(() => [
 
 // Handle position change
 function updatePosition() {
-  if (!selectedLayer.value || originalStateForUndo.value.x === undefined) return;
-  const command = commandFactory.updateLayer(
-    selectedLayer.value.id,
-    { x: parseFloat(posX.value), y: parseFloat(posY.value) },
-    { x: originalStateForUndo.value.x, y: originalStateForUndo.value.y }
-  );
-  command.execute();
-  historyStore.pushCommand(command);
-  originalStateForUndo.value = {};
+  if (!selectedLayer.value) return;
+  layersStore.updateLayer(selectedLayer.value.id, {
+      x: parseFloat(posX.value),
+      y: parseFloat(posY.value)
+  }, originalStateForUndo.value);
+  originalStateForUndo.value = {}; // Clear after use
 }
 
 // Handle scale change
 function updateScale() {
-  if (!selectedLayer.value || !originalStateForUndo.value.scale) return;
-  const command = commandFactory.updateLayer(
-    selectedLayer.value.id,
-    { scale: { x: parseFloat(scaleX.value), y: parseFloat(scaleY.value) } },
-    { scale: originalStateForUndo.value.scale }
-  );
-  command.execute();
-  historyStore.pushCommand(command);
+  if (!selectedLayer.value) return;
+  const newScaleValue = parseFloat(scale.value);
+  layersStore.updateLayer(selectedLayer.value.id, {
+      scale: { x: newScaleValue, y: newScaleValue }
+  }, originalStateForUndo.value);
   originalStateForUndo.value = {};
 }
 
 // Handle rotation change
 function updateRotation() {
-  if (!selectedLayer.value || originalStateForUndo.value.rotation === undefined) return;
-  const command = commandFactory.updateLayer(
-    selectedLayer.value.id,
-    { rotation: parseFloat(rotation.value) },
-    { rotation: originalStateForUndo.value.rotation }
-  );
-  command.execute();
-  historyStore.pushCommand(command);
+  if (!selectedLayer.value) return;
+  layersStore.updateLayer(selectedLayer.value.id, {
+      rotation: parseFloat(rotation.value)
+  }, originalStateForUndo.value);
   originalStateForUndo.value = {};
 }
 
 // Handle opacity change
 function updateOpacity() {
-  if (!selectedLayer.value || originalStateForUndo.value.opacity === undefined) return;
-  const command = commandFactory.updateLayer(
-    selectedLayer.value.id,
-    { opacity: parseFloat(opacity.value) },
-    { opacity: originalStateForUndo.value.opacity }
-  );
-  command.execute();
-  historyStore.pushCommand(command);
+  if (!selectedLayer.value) return;
+  layersStore.updateLayer(selectedLayer.value.id, {
+      opacity: parseFloat(opacity.value)
+  }, originalStateForUndo.value);
   originalStateForUndo.value = {};
 }
 
 // Handle blend mode change
 function updateBlendMode(mode) {
-  if (!selectedLayer.value || !originalStateForUndo.value.blendMode) return;
-   const command = commandFactory.updateLayer(
-    selectedLayer.value.id,
-    { blendMode: mode },
-    { blendMode: originalStateForUndo.value.blendMode }
-  );
-  command.execute();
-  historyStore.pushCommand(command);
+  if (!selectedLayer.value) return;
+  layersStore.updateLayer(selectedLayer.value.id, {
+      blendMode: mode
+  }, originalStateForUndo.value);
   originalStateForUndo.value = {};
 }
 
@@ -336,9 +310,7 @@ function toggleVisibility() {
   const originalState = { visible: layer.visible };
   const updates = { visible: !layer.visible };
   
-  historyStore.pushCommand(
-    commandFactory.updateLayer(layer.id, updates, originalState)
-  );
+  layersStore.updateLayer(layer.id, updates, originalState);
 }
 
 // Show a toast message
@@ -409,14 +381,11 @@ const hasPreview = computed(() => {
 // Update layer name
 function updateName() {
   if (!selectedLayer.value || originalStateForUndo.value.name === undefined) return;
-  
-  const command = commandFactory.updateLayer(
-    selectedLayer.value.id,
-    { name: selectedLayer.value.name },
-    { name: originalStateForUndo.value.name }
+  layersStore.updateLayer(
+    selectedLayer.value.id, 
+    { name: selectedLayer.value.name }, 
+    originalStateForUndo.value
   );
-  command.execute();
-  historyStore.pushCommand(command);
   originalStateForUndo.value = {};
 }
 
@@ -635,7 +604,7 @@ const layerTypeDisplay = computed(() => {
 }
 
 input[type="range"] {
-  width: 80%;
+  flex-grow: 1;
   -webkit-appearance: none;
   height: 4px;
   background: #444;
@@ -651,6 +620,17 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 50%;
   background: #12B0FF;
   cursor: pointer;
+}
+
+.input-group-vertical {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-group-vertical span {
+  min-width: 40px;
+  text-align: right;
 }
 
 /* Toast notification styles */

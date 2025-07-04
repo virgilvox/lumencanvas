@@ -103,13 +103,25 @@ function buildVertices() {
   if (props.layer.warp?.points && props.layer.warp.points.length === 4) {
     return props.layer.warp.points.flatMap(p => [p.x, p.y]);
   }
-  const { x = 0, y = 0, width = 0, height = 0 } = props.layer;
-  return [
-    x - width / 2, y - height / 2,
-    x + width / 2, y - height / 2,
-    x + width / 2, y + height / 2,
-    x - width / 2, y + height / 2,
+  
+  const { x = 0, y = 0, width = 0, height = 0, scale = {x: 1, y: 1}, rotation = 0 } = props.layer;
+  const w = width * (scale?.x || 1);
+  const h = height * (scale?.y || 1);
+
+  const corners = [
+      { x: -w / 2, y: -h / 2 }, { x:  w / 2, y: -h / 2 },
+      { x:  w / 2, y:  h / 2 }, { x: -w / 2, y:  h / 2 }
   ];
+
+  const rad = rotation * (Math.PI / 180);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+
+  return corners.flatMap(p => {
+      const rotatedX = p.x * cos - p.y * sin;
+      const rotatedY = p.x * sin + p.y * cos;
+      return [rotatedX + x, rotatedY + y];
+  });
 }
 
 function getQuadIndices(points) {
@@ -142,8 +154,8 @@ function updateGeometry() {
 updateGeometry();
 
 // Reactively update geometry when warp points or layer transform change
-watch(() => props.layer.warp?.points, updateGeometry, { deep: true });
-watch(() => [props.layer.x, props.layer.y, props.layer.width, props.layer.height], updateGeometry);
+watch(() => props.layer.warp, updateGeometry, { deep: true });
+watch(() => [props.layer.x, props.layer.y, props.layer.width, props.layer.height, props.layer.scale, props.layer.rotation], updateGeometry, { deep: true });
 
 // Watch for property changes on the existing video element
 watch(() => props.layer.content?.playing, (playing) => {

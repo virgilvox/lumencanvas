@@ -15,6 +15,19 @@ export const commandFactory = {
   updateLayer(layerId, updates, originalState) {
     const layersStore = useLayersStore();
     
+    // If originalState is not provided, fetch it before creating the command
+    if (!originalState) {
+        const layer = layersStore.layers.find(l => l.id === layerId);
+        if (layer) {
+            originalState = {};
+            for (const key in updates) {
+                if (Object.prototype.hasOwnProperty.call(layer, key)) {
+                    originalState[key] = JSON.parse(JSON.stringify(layer[key]));
+                }
+            }
+        }
+    }
+    
     return {
       type: 'UPDATE_LAYER',
       execute() {
@@ -181,6 +194,7 @@ export const commandFactory = {
    */
   reorderLayers(fromIndex, toIndex) {
     const layersStore = useLayersStore();
+    const layer = layersStore.layers[fromIndex];
     
     return {
       type: 'REORDER_LAYERS',

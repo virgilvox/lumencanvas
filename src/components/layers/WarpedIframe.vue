@@ -67,7 +67,7 @@ const iframeStyle = computed(() => {
             top: `${layer.y}px`,
             width: `${layer.width}px`,
             height: `${layer.height}px`,
-            transform: `translate(-50%, -50%) rotate(${layer.rotation || 0}rad) scale(${layer.scale?.x || 1}, ${layer.scale?.y || 1})`,
+            transform: `translate(-50%, -50%) rotate(${layer.rotation || 0}deg) scale(${layer.scale?.x || 1}, ${layer.scale?.y || 1})`,
             transformOrigin: 'center center',
             pointerEvents: layer.properties?.interactive ? 'auto' : 'none'
         };

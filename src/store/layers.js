@@ -129,49 +129,73 @@ export const useLayersStore = defineStore('layers', () => {
     const layer = layers.value.find(l => l.id === id);
     if (!layer) return;
 
-    // Store original state for undo
-    const originalState = {};
-    for (const key in updates) {
-      if (key in layer) {
-        // Create a safe copy of the original value without using structuredClone
-        if (key === 'warp' && layer[key]) {
-          originalState[key] = {
-            enabled: layer[key].enabled,
-            points: layer[key].points ? layer[key].points.map(p => ({ x: p.x, y: p.y })) : []
-          };
-        } else if (key === 'scale' && layer[key]) {
-          originalState[key] = { x: layer[key].x, y: layer[key].y };
-        } else if (key === 'content' && layer[key]) {
-          originalState[key] = { ...layer[key] };
-        } else if (key === 'properties' && layer[key]) {
-          originalState[key] = { ...layer[key] };
-        } else {
-          originalState[key] = layer[key];
-        }
-      }
-    }
+    // --- Start of new transformation logic ---
+    const newUpdates = { ...updates };
 
-    // If position changes and warp points exist, shift them accordingly
+    const currentRotation = layer.rotation || 0;
+    const currentScale = layer.scale || { x: 1, y: 1 };
+
+    let points = layer.warp?.points;
+    let hasWarp = points && points.length === 4;
+
+    // If scale or rotation is changing, and we have warp points, we need to transform them.
+    if (hasWarp && (updates.scale || typeof updates.rotation === 'number')) {
+      const newRotation = (typeof updates.rotation === 'number') ? updates.rotation : currentRotation;
+      const newScale = updates.scale || currentScale;
+
+      // Calculate the center of the warp points
+      const centerX = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
+      const centerY = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
+
+      // Calculate scale and rotation deltas
+      const scaleDeltaX = newScale.x / currentScale.x;
+      const scaleDeltaY = newScale.y / currentScale.y;
+      const rotationDelta = newRotation - currentRotation;
+      
+      const rotationDeltaRad = rotationDelta * (Math.PI / 180);
+      const cos = Math.cos(rotationDeltaRad);
+      const sin = Math.sin(rotationDeltaRad);
+
+      const transformedPoints = points.map(p => {
+        // Translate to origin for transformation
+        let x = p.x - centerX;
+        let y = p.y - centerY;
+        
+        // Apply scale first
+        x *= scaleDeltaX;
+        y *= scaleDeltaY;
+
+        // Then apply rotation
+        const rotatedX = x * cos - y * sin;
+        const rotatedY = x * sin + y * cos;
+
+        // Translate back to original position
+        return {
+          x: rotatedX + centerX,
+          y: rotatedY + centerY,
+        };
+      });
+      // We only update the warp points, the canonical scale/rotation is handled by the command
+      newUpdates.warp = { ...layer.warp, points: transformedPoints };
+    }
+    
+    // If position changes, we must also shift the warp points
     const delta = { x: 0, y: 0 };
-    if (typeof updates.x === 'number') {
+    if (typeof updates.x === 'number' && updates.x !== layer.x) {
       delta.x = updates.x - layer.x;
     }
-    if (typeof updates.y === 'number') {
+    if (typeof updates.y === 'number' && updates.y !== layer.y) {
       delta.y = updates.y - layer.y;
     }
-
-    if ((delta.x !== 0 || delta.y !== 0) && layer.warp?.points?.length) {
-      // Create a safe copy of warp points and update them
-      const newPoints = layer.warp.points.map(p => ({ x: p.x + delta.x, y: p.y + delta.y }));
-      updates.warp = {
-        ...(layer.warp || {}),
-        points: newPoints,
-      };
+    if ((delta.x !== 0 || delta.y !== 0) && hasWarp) {
+        const newPoints = points.map(p => ({ x: p.x + delta.x, y: p.y + delta.y }));
+        // If warp points are already being updated by scale/rotation, merge the changes
+        newUpdates.warp = { ...(newUpdates.warp || layer.warp), points: newPoints };
     }
+    // --- End of new transformation logic ---
 
-    // Create and execute command
-    const command = commandFactory.updateLayer(id, updates, originalState);
-    command.execute();
+    const command = commandFactory.updateLayer(id, newUpdates);
+    command.execute(); 
     historyStore.pushCommand(command);
   }
 
