@@ -13,7 +13,6 @@
       <div class="tool-group segmented">
         <button class="tool-button">Scene ▾</button>
         <button class="tool-button" @click="toggleMask">Mask (M)</button>
-        <button class="tool-button" @click="togglePreview">Preview (P)</button>
       </div>
       
       <!-- Collaboration Status -->
@@ -118,31 +117,6 @@
       </div>
     </div>
 
-    <!-- Preview Modal -->
-    <PreviewModal 
-      v-model="showPreviewModal"
-    >
-      <template #preview-content>
-        <div class="preview-content">
-          <!-- Here you would render your canvas content -->
-          <div 
-            class="preview-canvas"
-            :style="{
-              width: `${projectStore.canvasWidth}px`,
-              height: `${projectStore.canvasHeight}px`,
-              backgroundColor: '#000'
-            }"
-          >
-            <!-- For now, just show a placeholder -->
-            <div v-if="layersStore.layers.length === 0" class="no-layers">
-              No layers to preview
-            </div>
-            <!-- In a real implementation, you would render the actual layers here -->
-          </div>
-        </div>
-      </template>
-    </PreviewModal>
-    
     <!-- Backup Manager Modal -->
     <Teleport to="body">
       <Transition name="modal">
@@ -180,7 +154,6 @@ import { useProjectStore } from '../store/project';
 import { useHistoryStore } from '../store/history';
 import { useStorageService } from '../services/storage';
 import { useRouter } from 'vue-router';
-import PreviewModal from './PreviewModal.vue';
 import BackupManager from './BackupManager.vue';
 import ProjectSettingsModal from './ProjectSettingsModal.vue';
 import { SignedIn, SignedOut, UserButton } from '@clerk/vue';
@@ -207,7 +180,6 @@ const toastDuration = ref(3000);
 const saveTimeout = ref(null);
 const projectorWindow = ref(null);
 const broadcastChannel = ref(null);
-const showPreviewModal = ref(false);
 const showBackupManager = ref(false);
 
 // Project settings modal state
@@ -459,10 +431,6 @@ const saveStatus = computed(() => {
 function toggleMask() {
   // TODO: Implement masking functionality
   console.log('Mask toggle - to be implemented');
-}
-
-function togglePreview() {
-  showPreviewModal.value = !showPreviewModal.value;
 }
 </script>
 

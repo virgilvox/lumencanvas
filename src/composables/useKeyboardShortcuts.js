@@ -52,12 +52,6 @@ export function useKeyboardShortcuts() {
       }
     },
     
-    // P - Open projector view
-    'p': () => {
-      // TODO: Implement projector view
-      console.log('Open projector');
-    },
-    
     // M - Mask via webcam
     'm': () => {
       // TODO: Implement masking
