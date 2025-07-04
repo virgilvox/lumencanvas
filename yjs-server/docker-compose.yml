@@ -12,6 +12,8 @@ services:
       - ENABLE_TLS=false
     restart: unless-stopped
     container_name: yjs-server-dev
+    profiles:
+      - dev
 
   # Production configuration (HTTPS/WSS)
   yjs-server-prod:
