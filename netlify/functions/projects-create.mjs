@@ -41,8 +41,8 @@ export const handler = async (event) => {
       version: "1.0",
       metadata: {
         id: projectId,
-        name: projectData.name || 'Untitled Project',
-        description: projectData.description || '',
+        name: projectData.metadata?.name || projectData.name || 'Untitled Project',
+        description: projectData.metadata?.description || projectData.description || '',
         created: now,
         modified: now,
         author: userId,

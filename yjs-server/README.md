@@ -88,7 +88,7 @@ wscat -c ws://localhost:1234
 wscat -c wss://y.monolith.services
 ```
 
-## DigitalOcean Deployment Guide
+## DigitalOcean Deployment
 
 This guide assumes you are using the recommended **Reverse Proxy** setup.
 
@@ -126,6 +126,292 @@ This guide assumes you are using the recommended **Reverse Proxy** setup.
 6.  **Ensure your reverse proxy is configured** to forward `wss://y.monolith.services` to `ws://127.0.0.1:1234`.
 
 This completes the setup. The server is now running in a detached, production-ready state.
+
+## Complete Production Deployment Guide
+
+This section provides step-by-step instructions for deploying the yjs-server on a DigitalOcean droplet with nginx reverse proxy and SSL.
+
+### Prerequisites
+
+- A DigitalOcean droplet with Ubuntu 20.04 or later
+- A domain name pointing to your droplet's IP address
+- Root or sudo access to the server
+
+### Step 1: Initial Server Setup
+
+```bash
+# SSH into your droplet
+ssh root@your-droplet-ip
+
+# Update the system
+apt update && apt upgrade -y
+
+# Install required packages
+apt install -y docker.io docker-compose nginx certbot python3-certbot-nginx git
+```
+
+### Step 2: Clone and Build the Project
+
+```bash
+# Clone the repository
+cd ~
+git clone https://github.com/your-username/lumencanvas.git
+cd lumencanvas
+
+# Navigate to yjs-server directory
+cd yjs-server
+
+# Build the Docker image
+docker build -t yjs-server . --no-cache
+```
+
+### Step 3: Run the yjs-server Container
+
+```bash
+# Stop and remove any existing containers
+docker stop yjs-server 2>/dev/null || true
+docker rm yjs-server 2>/dev/null || true
+
+# Run the container (bound to localhost only for nginx proxy)
+docker run -d \
+  --name yjs-server \
+  --restart unless-stopped \
+  -p 127.0.0.1:1234:1234 \
+  yjs-server
+
+# Verify it's running
+docker logs yjs-server
+```
+
+### Step 4: Configure Nginx
+
+1. **Add WebSocket map to main nginx config:**
+
+```bash
+# Edit nginx.conf
+nano /etc/nginx/nginx.conf
+```
+
+Add this inside the `http {` block (after `gzip on;`):
+
+```nginx
+##
+# WebSocket upgrade map
+##
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+```
+
+2. **Create site configuration:**
+
+```bash
+# Create new site configuration
+nano /etc/nginx/sites-available/y.monolith.services
+```
+
+Add this configuration (replace `y.monolith.services` with your domain):
+
+```nginx
+# HTTP server - redirect to HTTPS
+server {
+    listen 80;
+    server_name y.monolith.services;
+    return 301 https://$server_name$request_uri;
+}
+
+# HTTPS server with WebSocket proxy
+server {
+    listen 443 ssl http2;
+    server_name y.monolith.services;
+
+    # SSL configuration
+    ssl_certificate /etc/letsencrypt/live/y.monolith.services/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/y.monolith.services/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # WebSocket proxy configuration
+    location / {
+        proxy_pass http://127.0.0.1:1234;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Extended timeouts for WebSocket
+        proxy_connect_timeout 7d;
+        proxy_send_timeout 7d;
+        proxy_read_timeout 7d;
+        
+        # Disable buffering
+        proxy_buffering off;
+        proxy_request_buffering off;
+        
+        # Larger buffers for WebSocket frames
+        proxy_buffer_size 64k;
+        proxy_buffers 8 64k;
+        proxy_busy_buffers_size 128k;
+    }
+
+    # Optional health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+}
+```
+
+3. **Enable the site:**
+
+```bash
+# Create symbolic link
+ln -s /etc/nginx/sites-available/y.monolith.services /etc/nginx/sites-enabled/
+
+# Test nginx configuration
+nginx -t
+
+# Reload nginx
+systemctl reload nginx
+```
+
+### Step 5: Obtain SSL Certificate
+
+```bash
+# Get Let's Encrypt certificate
+certbot --nginx -d y.monolith.services
+
+# Follow the prompts to complete certificate installation
+```
+
+### Step 6: Configure DNS
+
+In your domain registrar (e.g., Namecheap):
+
+1. Go to DNS settings
+2. Add an A record:
+   - Type: A Record
+   - Host: `y` (or `@` for root domain)
+   - Value: Your droplet's IP address
+   - TTL: Automatic
+
+**Important:** Do NOT use URL forwarding or redirects - WebSockets require direct DNS resolution.
+
+### Step 7: Verify Deployment
+
+1. **Check services are running:**
+
+```bash
+# Check Docker container
+docker ps | grep yjs-server
+
+# Check nginx
+systemctl status nginx
+
+# Check ports
+netstat -tlnp | grep -E '(1234|80|443)'
+```
+
+2. **Test WebSocket connection:**
+
+```bash
+# Install wscat if needed
+npm install -g wscat
+
+# Test local connection
+wscat -c ws://localhost:1234
+
+# Test through nginx
+wscat -c wss://y.monolith.services
+```
+
+3. **Monitor logs:**
+
+```bash
+# Watch Docker logs
+docker logs -f yjs-server
+
+# Watch nginx logs
+tail -f /var/log/nginx/error.log /var/log/nginx/access.log
+```
+
+### Step 8: Maintenance Commands
+
+```bash
+# Restart yjs-server
+docker restart yjs-server
+
+# Update and rebuild
+cd ~/lumencanvas
+git pull
+cd yjs-server
+docker build -t yjs-server . --no-cache
+docker stop yjs-server && docker rm yjs-server
+docker run -d --name yjs-server --restart unless-stopped -p 127.0.0.1:1234:1234 yjs-server
+
+# View container resource usage
+docker stats yjs-server
+
+# Clean up old Docker images
+docker system prune -a
+```
+
+### Troubleshooting Checklist
+
+If WebSocket connections fail:
+
+1. ✓ Is the Docker container running? (`docker ps`)
+2. ✓ Is nginx running? (`systemctl status nginx`)
+3. ✓ Are certificates valid? (`certbot certificates`)
+4. ✓ Is DNS resolving correctly? (`dig your-domain.com`)
+5. ✓ Are ports accessible? (`netstat -tlnp`)
+6. ✓ Check nginx error logs (`tail -f /var/log/nginx/error.log`)
+7. ✓ Check Docker logs (`docker logs yjs-server`)
+
+### Security Recommendations
+
+1. **Firewall Configuration:**
+
+```bash
+# Allow only necessary ports
+ufw allow 22/tcp    # SSH
+ufw allow 80/tcp    # HTTP
+ufw allow 443/tcp   # HTTPS
+ufw enable
+```
+
+2. **Automatic Certificate Renewal:**
+
+```bash
+# Test renewal
+certbot renew --dry-run
+
+# Cron job is automatically created by certbot
+```
+
+3. **Regular Updates:**
+
+```bash
+# Create update script
+cat > /root/update-yjs.sh << 'EOF'
+#!/bin/bash
+cd /root/lumencanvas
+git pull
+cd yjs-server
+docker build -t yjs-server . --no-cache
+docker stop yjs-server
+docker rm yjs-server
+docker run -d --name yjs-server --restart unless-stopped -p 127.0.0.1:1234:1234 yjs-server
+docker system prune -f
+EOF
+
+chmod +x /root/update-yjs.sh
+```
 
 ## Nginx Configuration for WebSocket Proxying
 
@@ -355,7 +641,7 @@ When contributing to the Yjs server setup:
 4. Update documentation for any new features
 5. Test integration with the main LumenCanvas application
 
-## DigitalOcean Deployment Guide
+## DigitalOcean Deployment
 
 ### Prerequisites
 - DigitalOcean droplet with Docker installed
