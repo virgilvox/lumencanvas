@@ -109,46 +109,23 @@ function handleOpenCodeEditor(event) {
 }
 
 onMounted(async () => {
-  // 1. Load the project from the API first. This is the source of truth.
+  // 1. Load project from API - this is the source of truth.
   await projectStore.loadProject(props.id);
   
-  // 2. Now that Pinia stores are populated, connect to Yjs.
-  const { yLayers, yCanvas, connectionStatus, synced } = useSync(props.id);
-
-  // Watch for connection status changes
+  // 2. Connect to Yjs to broadcast state.
+  const { yLayers, yCanvas, connectionStatus } = useSync(props.id);
+  
+  // Update UI with connection status.
   watch(connectionStatus, (newStatus) => {
     collaborationStatus.value.connectionStatus = newStatus;
   }, { immediate: true });
 
-  watch(synced, (isSynced) => {
-    collaborationStatus.value.synced = isSynced;
-    if (isSynced) {
-      collaborationStatus.value.connectionStatus = 'connected';
-    }
-  }, { immediate: true });
-
-  // 3. Set up a two-way binding between Pinia store and Yjs
-  let localChange = false;
-
-  // Sync from Yjs to Pinia for changes from other clients
-  const syncFromYjs = () => {
-    if (localChange) return;
-    const layersFromYjs = yLayers.toArray().map(yMap => yMap.toJSON());
-    if (JSON.stringify(layersFromYjs) !== JSON.stringify(layersStore.layers)) {
-      layersStore.importLayers(layersFromYjs);
-    }
-  };
-  yLayers.observeDeep(syncFromYjs);
-
-  // Sync from Pinia to Yjs (throttled)
-  // This watcher will also handle the initial push of data to Yjs
-  watch(
-    () => layersStore.layers,
-    (newLayers) => {
-      localChange = true;
+  // 3. Set up a ONE-WAY broadcast from Pinia to Yjs (throttled).
+  watchThrottled(
+    () => [layersStore.layers, projectStore.canvasWidth, projectStore.canvasHeight, projectStore.canvasBackground],
+    ([newLayers, width, height, bg]) => {
       yLayers.doc.transact(() => {
-        // Simple and robust: clear and re-insert.
-        yLayers.delete(0, yLayers.length);
+        // Full state overwrite on every change for simplicity and robustness.
         const ymaps = JSON.parse(JSON.stringify(newLayers)).map(layer => {
           const map = new Y.Map();
           for (const key in layer) {
@@ -156,14 +133,15 @@ onMounted(async () => {
           }
           return map;
         });
+        yLayers.delete(0, yLayers.length);
         yLayers.insert(0, ymaps);
-      }, 'update-from-pinia');
-      // Use nextTick to ensure the transaction is processed before allowing syncFromYjs to run
-      nextTick(() => {
-        localChange = false;
-      });
+        
+        yCanvas.set('width', width);
+        yCanvas.set('height', height);
+        yCanvas.set('background', bg);
+      }, 'broadcast-editor-state');
     },
-    { deep: true, immediate: true } // immediate: true ensures the initial state is pushed
+    { throttle: 100, deep: true, immediate: true } // immediate: true ensures the initial state is pushed
   );
 
   window.addEventListener('open-code-editor', handleOpenCodeEditor);

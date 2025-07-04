@@ -17,6 +17,7 @@ This document provides a comprehensive overview of the LumenCanvas application a
 4.  [Backend Deep Dive (Netlify Functions)](#4-backend-deep-dive)
 5.  [Real-Time Collaboration (Yjs)](#5-real-time-collaboration-yjs)
 6.  [How to Add a Custom Layer](#6-how-to-add-a-custom-layer)
+7.  [Environment Variables](#7-environment-variables)
 
 ---
 
@@ -240,4 +241,40 @@ Adding a new layer type involves these steps:
     </div>
     ```
 
-After these steps, your new custom layer type will be fully integrated into the application, including state management, rendering, and the UI. 
+After these steps, your new custom layer type will be fully integrated into the application, including state management, rendering, and the UI.
+
+---
+
+## 7. Environment Variables
+
+To run the application, you will need to configure environment variables for both local development and production.
+
+### Local Development
+
+For local development using `netlify dev`, create a `.env` file in the root of your project. **This file should not be committed to version control.**
+
+```.env
+# Clerk Development Keys (from your Clerk dashboard)
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# Yjs WebSocket Server (optional, defaults to production)
+VITE_YJS_SERVER=ws://localhost:1234
+```
+
+- `VITE_CLERK_PUBLISHABLE_KEY`: Your public-facing key for the Clerk frontend. The `VITE_` prefix is required by Vite to expose the variable to the client-side code.
+- `CLERK_SECRET_KEY`: Your secret key for verifying JWTs in your Netlify functions.
+- `VITE_YJS_SERVER`: The URL for your local Yjs WebSocket server.
+
+### Production
+
+For your deployed Netlify site, you must set the environment variables in the Netlify UI:
+
+1.  Go to your site's dashboard on Netlify.
+2.  Navigate to **Site settings > Build & deploy > Environment**.
+3.  Add the following variables with your **production** keys from Clerk:
+    -   `VITE_CLERK_PUBLISHABLE_KEY`
+    -   `CLERK_SECRET_KEY`
+    -   `VITE_YJS_SERVER` (if you are running a production Yjs server, e.g., `wss://y.monolith.services`)
+
+Netlify will automatically use these variables during the build and for your serverless functions. 
