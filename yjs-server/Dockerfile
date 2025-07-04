@@ -2,18 +2,26 @@
 # yjs-websocket server with optional TLS support
 # ───────────────────────────────────────────────
 # syntax=docker/dockerfile:1
+
+# Stage 1: Build dependencies
+FROM node:20-alpine AS builder
+WORKDIR /usr/src/app
+COPY package*.json ./
+RUN npm install --only=production
+
+# Stage 2: Production image
 FROM node:20-alpine
+
+# Create a non-root user and group
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
 WORKDIR /usr/src/app
 
-# Install the official server binary
-RUN npm install -g y-websocket
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/node_modules ./node_modules
+COPY --chown=nodejs:nodejs . .
 
-# ─── Wrapper ---------------------------------------------------------------
-# If ENABLE_TLS=true the wrapper starts the server with --cert / --key,
-# otherwise it starts it in plain-WS mode.
-COPY docker-entrypoint.sh /usr/local/bin/entrypoint
-RUN chmod +x /usr/local/bin/entrypoint
+USER nodejs
 
 # Default settings
 ENV HOST=0.0.0.0 \
@@ -26,4 +34,8 @@ ENV HOST=0.0.0.0 \
 # Expose both ports so you can bind whichever you need
 EXPOSE 1234 443
 
-ENTRYPOINT ["/usr/local/bin/entrypoint"] 
+# Healthcheck to verify the server is running
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q -O - "http://localhost:${PORT:-1234}/healthz" || exit 1
+
+CMD [ "npm", "start" ] 
