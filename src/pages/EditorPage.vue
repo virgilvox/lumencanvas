@@ -23,7 +23,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { watchThrottled } from '@vueuse/core';
 import * as Y from 'yjs';
 import EditorLayout from '../layouts/EditorLayout.vue';
@@ -108,164 +108,63 @@ function handleOpenCodeEditor(event) {
   handleRequestEdit(event.detail);
 }
 
-onMounted(() => {
-  const { yLayers, yCanvas, provider, connectionStatus, synced } = useSync(props.id);
+onMounted(async () => {
+  // 1. Load the project from the API first. This is the source of truth.
+  await projectStore.loadProject(props.id);
+  
+  // 2. Now that Pinia stores are populated, connect to Yjs.
+  const { yLayers, yCanvas, connectionStatus, synced } = useSync(props.id);
 
-  // Set up collaboration status tracking using existing sync status
+  // Watch for connection status changes
   watch(connectionStatus, (newStatus) => {
     collaborationStatus.value.connectionStatus = newStatus;
-    if (newStatus === 'connected') {
-      console.log('🔗 Connected to collaboration server');
-    } else if (newStatus === 'disconnected') {
-      console.log('🔌 Disconnected from collaboration server');
-    }
   }, { immediate: true });
 
   watch(synced, (isSynced) => {
     collaborationStatus.value.synced = isSynced;
     if (isSynced) {
-      console.log('✅ Document synchronized');
+      collaborationStatus.value.connectionStatus = 'connected';
     }
   }, { immediate: true });
 
-  const initialData = history.state.project;
-  projectStore.loadProject(props.id, initialData).then(() => {
-    
-    const fullSync = () => {
-      const localLayers = layersStore.layers;
-      yLayers.delete(0, yLayers.length);
-      const ymaps = JSON.parse(JSON.stringify(localLayers)).map(layer => {
+  // 3. Set up a two-way binding between Pinia store and Yjs
+  let localChange = false;
+
+  // Sync from Yjs to Pinia for changes from other clients
+  const syncFromYjs = () => {
+    if (localChange) return;
+    const layersFromYjs = yLayers.toArray().map(yMap => yMap.toJSON());
+    if (JSON.stringify(layersFromYjs) !== JSON.stringify(layersStore.layers)) {
+      layersStore.importLayers(layersFromYjs);
+    }
+  };
+  yLayers.observeDeep(syncFromYjs);
+
+  // Sync from Pinia to Yjs (throttled)
+  // This watcher will also handle the initial push of data to Yjs
+  watch(
+    () => layersStore.layers,
+    (newLayers) => {
+      localChange = true;
+      yLayers.doc.transact(() => {
+        // Simple and robust: clear and re-insert.
+        yLayers.delete(0, yLayers.length);
+        const ymaps = JSON.parse(JSON.stringify(newLayers)).map(layer => {
           const map = new Y.Map();
           for (const key in layer) {
-              map.set(key, layer[key]);
+            map.set(key, layer[key]);
           }
           return map;
+        });
+        yLayers.insert(0, ymaps);
+      }, 'update-from-pinia');
+      // Use nextTick to ensure the transaction is processed before allowing syncFromYjs to run
+      nextTick(() => {
+        localChange = false;
       });
-      yLayers.insert(0, ymaps);
-    };
-
-    const syncStateToYjs = () => {
-      yLayers.doc.transact(() => {
-        const localLayers = layersStore.layers;
-        let yjsLayersArray;
-        try {
-          yjsLayersArray = yLayers.toArray();
-        } catch (e) {
-          console.warn('Yjs data structure is invalid. Forcing full sync.', e);
-          fullSync();
-          return;
-        }
-
-        const localIds = localLayers.map(l => l.id);
-        const yjsIds = yjsLayersArray.map(l => l.id);
-
-        const hasStructuralChange = localIds.length !== yjsIds.length || 
-                                    localIds.some((id, index) => id !== yjsIds[index]);
-
-        if (hasStructuralChange) {
-          fullSync();
-        } else {
-          let hasInvalidYMap = false;
-          
-          localLayers.forEach((localLayer, index) => {
-            const yLayerMap = yLayers.get(index);
-            
-            if (typeof yLayerMap?.get !== 'function') {
-                if (!hasInvalidYMap) {
-                  console.warn(`Item at index ${index} is not a Y.Map. Forcing full sync.`);
-                  hasInvalidYMap = true;
-                }
-                return;
-            }
-            
-            const localLayerJSON = JSON.stringify(localLayer);
-            const yjsLayerJSON = JSON.stringify(yLayerMap.toJSON());
-
-            if (localLayerJSON !== yjsLayerJSON) {
-              for (const key in localLayer) {
-                if(JSON.stringify(yLayerMap.get(key)) !== JSON.stringify(localLayer[key])) {
-                  yLayerMap.set(key, localLayer[key]);
-                }
-              }
-            }
-          });
-          
-          if (hasInvalidYMap) {
-            fullSync();
-          }
-        }
-
-        // Sync canvas properties
-        yCanvas.set('width', projectStore.canvasWidth);
-        yCanvas.set('height', projectStore.canvasHeight);
-        yCanvas.set('background', projectStore.canvasBackground);
-      }, 'sync-state');
-    };
-
-    // Initial sync
-    syncStateToYjs();
-
-    // Listen for incoming changes from other clients
-    let isUpdatingFromYjs = false;
-    
-    // Sync FROM Yjs TO local state when remote changes occur
-    const syncFromYjs = () => {
-      if (isUpdatingFromYjs) return; // Prevent infinite loops
-      
-      isUpdatingFromYjs = true;
-      
-      try {
-        // Sync layers from Yjs
-        const yjsLayers = yLayers.toArray().map(yLayer => yLayer.toJSON());
-        if (JSON.stringify(yjsLayers) !== JSON.stringify(layersStore.layers)) {
-          layersStore.importLayers(yjsLayers);
-        }
-        
-        // Sync canvas properties from Yjs
-        const yjsWidth = yCanvas.get('width');
-        const yjsHeight = yCanvas.get('height');
-        const yjsBackground = yCanvas.get('background');
-        
-        if (yjsWidth && yjsWidth !== projectStore.canvasWidth) {
-          projectStore.setCanvasSize(yjsWidth, projectStore.canvasHeight);
-        }
-        if (yjsHeight && yjsHeight !== projectStore.canvasHeight) {
-          projectStore.setCanvasSize(projectStore.canvasWidth, yjsHeight);
-        }
-        if (yjsBackground && yjsBackground !== projectStore.canvasBackground) {
-          projectStore.setCanvasBackground(yjsBackground);
-        }
-      } catch (error) {
-        console.warn('Error syncing from Yjs:', error);
-      } finally {
-        isUpdatingFromYjs = false;
-      }
-    };
-
-    // Listen for changes from remote clients
-    yLayers.observe(syncFromYjs);
-    yCanvas.observe(syncFromYjs);
-
-    // Watch for local changes and sync them to Yjs, but throttled
-    watchThrottled(
-      () => layersStore.layers, 
-      () => {
-        if (!isUpdatingFromYjs) { // Don't sync back changes that came from Yjs
-          syncStateToYjs();
-        }
-      }, 
-      { throttle: 50, deep: true } // Sync at most every 50ms (20fps)
-    );
-
-    // Watch for canvas changes (these are less frequent, so no debounce needed)
-    watch([() => projectStore.canvasWidth, () => projectStore.canvasHeight, () => projectStore.canvasBackground], () => {
-      if (!isUpdatingFromYjs) { // Don't sync back changes that came from Yjs
-        yCanvas.set('width', projectStore.canvasWidth);
-        yCanvas.set('height', projectStore.canvasHeight);
-        yCanvas.set('background', projectStore.canvasBackground);
-      }
-    });
-  });
+    },
+    { deep: true, immediate: true } // immediate: true ensures the initial state is pushed
+  );
 
   window.addEventListener('open-code-editor', handleOpenCodeEditor);
 });
