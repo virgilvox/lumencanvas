@@ -62,7 +62,7 @@ export const useLayersStore = defineStore('layers', () => {
       content: content || getDefaultContent(type),
       properties: getDefaultProperties(type),
       warp: {
-        enabled: false,
+        enabled: true,
         points: [
           { x: x - width / 2, y: y - height / 2 },
           { x: x + width / 2, y: y - height / 2 },
@@ -351,7 +351,7 @@ export const useLayersStore = defineStore('layers', () => {
           } else {
             // Default warp configuration
             validLayer.warp = {
-              enabled: false,
+              enabled: true,
               points: [
                 { x: validLayer.x - validLayer.width / 2, y: validLayer.y - validLayer.height / 2 },
                 { x: validLayer.x + validLayer.width / 2, y: validLayer.y - validLayer.height / 2 },

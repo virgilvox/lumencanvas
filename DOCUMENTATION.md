@@ -231,7 +231,7 @@ Adding a new layer type involves these steps:
     ```
 
 6.  **Add Properties to `PropertiesPanel.vue`:**
-    If your new layer has custom properties, add controls for them in `src/components/PropertiesPanel.vue` using a `v-if` directive.
+    If your new layer has custom properties, add controls for them in `src/components/PropertiesPanel.vue` using a `v-if` directive. Note that warping is now enabled by default for all new layers.
 
     ```vue
     <!-- src/components/PropertiesPanel.vue -->

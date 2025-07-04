@@ -10,11 +10,10 @@
     </div>
 
     <div class="center-tools">
-      <div class="tool-group segmented">
-        <button class="tool-button">Scene ▾</button>
-        <button class="tool-button" @click="toggleMask">Mask (M)</button>
+      <div class="info-text">
+        Press 'E' to toggle warp handles
       </div>
-      
+
       <!-- Collaboration Status -->
       <div class="tool-group collaboration-status" v-if="collaborationStatus">
         <div 
@@ -429,8 +428,7 @@ const saveStatus = computed(() => {
 });
 
 function toggleMask() {
-  // TODO: Implement masking functionality
-  console.log('Mask toggle - to be implemented');
+  // This function is no longer needed
 }
 </script>
 
@@ -455,6 +453,15 @@ function toggleMask() {
 .center-tools {
   flex-grow: 1;
   justify-content: center;
+}
+
+.info-text {
+  font-size: 13px;
+  color: #888;
+  padding: 6px 12px;
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 6px;
 }
 
 .logo {
