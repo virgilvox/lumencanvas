@@ -1,0 +1,41 @@
+# Documentation
+README.md
+*.md
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Certificates (should be mounted as volumes)
+certs/
+*.pem
+*.key
+*.crt
+
+# Development
+.env
+.env.local
+.env.development
+.env.test
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies (will be installed in container)
+node_modules/
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db 

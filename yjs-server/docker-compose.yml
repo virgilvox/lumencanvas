@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  yjs-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "1234:1234"  # WebSocket port
+      - "443:443"    # HTTPS/WSS port
+    environment:
+      - HOST=0.0.0.0
+      - PORT=1234
+      - TLS_ENABLED=false
+      - TLS_PORT=443
+      - TLS_CERT_PATH=/certs/cert.pem
+      - TLS_KEY_PATH=/certs/key.pem
+      # Uncomment for verbose logging
+      # - DEBUG=y*
+    volumes:
+      # Mount certificate directory if using TLS
+      # - ./certs:/certs:ro
+      # Mount for development (uncomment to enable hot reloading)
+      # - .:/app
+    restart: unless-stopped
+    # Uncomment for production deployment
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512M
+    #     reservations:
+    #       memory: 256M
+
+  # Optional: Redis for persistence (uncomment if needed)
+  # redis:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_data:/data
+  #   command: redis-server --appendonly yes
+
+# Uncomment if using Redis
+# volumes:
+#   redis_data: 
