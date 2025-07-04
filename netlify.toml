@@ -9,18 +9,21 @@
   to = "/.netlify/functions/assets-create-upload-url"
   status = 200
   force = true
+  method = "POST"
 
 [[redirects]]
   from = "/api/assets/delete"
   to = "/.netlify/functions/assets-delete"
   status = 200
   force = true
+  method = "POST"
 
 [[redirects]]
   from = "/api/assets/set-public-acl"
   to = "/.netlify/functions/assets-set-public-acl"
   status = 200
   force = true
+  method = "POST"
 
 # API proxy rules for Projects
 [[redirects]]
@@ -28,36 +31,35 @@
   to = "/.netlify/functions/projects-list"
   status = 200
   force = true
+  method = "GET"
 
 [[redirects]]
   from = "/api/projects/create"
   to = "/.netlify/functions/projects-create"
   status = 200
   force = true
+  method = "POST"
   
 [[redirects]]
   from = "/api/projects/update"
   to = "/.netlify/functions/projects-update"
   status = 200
   force = true
+  method = "POST"
 
 [[redirects]]
   from = "/api/projects/:id"
   to = "/.netlify/functions/projects-read?id=:id"
   status = 200
   force = true
-
-[[redirects]]
-  from = "/api/projects/:id"
-  to = "/.netlify/functions/projects-update?id=:id"
-  status = 200
-  force = true
+  method = "GET"
 
 [[redirects]]
   from = "/api/projects/:id"
   to = "/.netlify/functions/projects-delete?id=:id"
   status = 200
   force = true
+  method = "DELETE"
 
 # SPA fallback rule
 [[redirects]]
