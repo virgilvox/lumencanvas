@@ -127,6 +127,114 @@ This guide assumes you are using the recommended **Reverse Proxy** setup.
 
 This completes the setup. The server is now running in a detached, production-ready state.
 
+## Nginx Configuration for WebSocket Proxying
+
+The most common cause of WebSocket connection errors (code 1006) is improper nginx configuration. WebSockets require special handling in nginx to maintain long-lived connections.
+
+### Critical Configuration Elements
+
+1. **WebSocket Upgrade Headers**: Required for protocol switching
+2. **Extended Timeouts**: Prevent premature connection closure
+3. **Disabled Buffering**: Ensures real-time data flow
+4. **Connection Upgrade Mapping**: Handles the protocol upgrade properly
+
+### Example Configuration
+
+See `nginx-config-example.conf` for a complete configuration. Key settings:
+
+```nginx
+# Map for connection upgrade
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+location / {
+    proxy_pass http://127.0.0.1:1234;
+    proxy_http_version 1.1;
+    
+    # Critical WebSocket headers
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    
+    # Extended timeouts (7 days)
+    proxy_connect_timeout 7d;
+    proxy_send_timeout 7d;
+    proxy_read_timeout 7d;
+    
+    # Disable buffering
+    proxy_buffering off;
+}
+```
+
+### Applying the Configuration
+
+1. Copy the configuration to your server:
+   ```bash
+   scp nginx-config-example.conf root@your-server:/etc/nginx/sites-available/y.monolith.services
+   ```
+
+2. Enable the site:
+   ```bash
+   ln -s /etc/nginx/sites-available/y.monolith.services /etc/nginx/sites-enabled/
+   ```
+
+3. Test the configuration:
+   ```bash
+   nginx -t
+   ```
+
+4. Reload nginx:
+   ```bash
+   systemctl reload nginx
+   ```
+
+### Troubleshooting WebSocket Issues
+
+If you see connection errors in the browser console:
+
+1. **Check nginx error logs**:
+   ```bash
+   tail -f /var/log/nginx/error.log
+   ```
+
+2. **Verify WebSocket headers are being passed**:
+   ```bash
+   curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" https://y.monolith.services
+   ```
+
+3. **Common issues**:
+   - Missing `proxy_http_version 1.1` (WebSockets require HTTP/1.1)
+   - Default 60s timeout causing disconnections
+   - Missing upgrade headers
+   - Buffering enabled (causes delays)
+
+## Monitoring
+
+```bash
+# Check container status
+docker ps | grep yjs-server
+
+# View logs
+docker logs yjs-server
+
+# Follow logs in real-time
+docker logs -f yjs-server
+
+# Check resource usage
+docker stats yjs-server
+```
+
+### Backup & Restore
+
+```bash
+# Backup container image
+docker save yjs-server | gzip > yjs-server-backup.tar.gz
+
+# Restore from backup
+gunzip -c yjs-server-backup.tar.gz | docker load
+```
+
 ## Integration with LumenCanvas
 
 To integrate this Yjs server with your LumenCanvas application:
@@ -286,30 +394,93 @@ When contributing to the Yjs server setup:
    curl -I http://localhost:1234
    ```
 
-6. **Update your reverse proxy config** to forward WSS to the container:
-   
-   **For Nginx:**
-   ```nginx
-   # Add to your nginx config
-   location /yjs/ {
-       proxy_pass http://127.0.0.1:1234/;
-       proxy_http_version 1.1;
-       proxy_set_header Upgrade $http_upgrade;
-       proxy_set_header Connection "upgrade";
-       proxy_set_header Host $host;
-       proxy_set_header X-Real-IP $remote_addr;
-       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-       proxy_set_header X-Forwarded-Proto $scheme;
-   }
-   ```
+6. **Update your reverse proxy config** to forward `wss://y.monolith.services` to `ws://127.0.0.1:1234`.
 
-7. **Test the connection:**
+This completes the setup. The server is now running in a detached, production-ready state.
+
+## Nginx Configuration for WebSocket Proxying
+
+The most common cause of WebSocket connection errors (code 1006) is improper nginx configuration. WebSockets require special handling in nginx to maintain long-lived connections.
+
+### Critical Configuration Elements
+
+1. **WebSocket Upgrade Headers**: Required for protocol switching
+2. **Extended Timeouts**: Prevent premature connection closure
+3. **Disabled Buffering**: Ensures real-time data flow
+4. **Connection Upgrade Mapping**: Handles the protocol upgrade properly
+
+### Example Configuration
+
+See `nginx-config-example.conf` for a complete configuration. Key settings:
+
+```nginx
+# Map for connection upgrade
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+location / {
+    proxy_pass http://127.0.0.1:1234;
+    proxy_http_version 1.1;
+    
+    # Critical WebSocket headers
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    
+    # Extended timeouts (7 days)
+    proxy_connect_timeout 7d;
+    proxy_send_timeout 7d;
+    proxy_read_timeout 7d;
+    
+    # Disable buffering
+    proxy_buffering off;
+}
+```
+
+### Applying the Configuration
+
+1. Copy the configuration to your server:
    ```bash
-   # From your local machine
-   wscat -c wss://y.monolith.services/yjs/
+   scp nginx-config-example.conf root@your-server:/etc/nginx/sites-available/y.monolith.services
    ```
 
-### Monitoring & Logs
+2. Enable the site:
+   ```bash
+   ln -s /etc/nginx/sites-available/y.monolith.services /etc/nginx/sites-enabled/
+   ```
+
+3. Test the configuration:
+   ```bash
+   nginx -t
+   ```
+
+4. Reload nginx:
+   ```bash
+   systemctl reload nginx
+   ```
+
+### Troubleshooting WebSocket Issues
+
+If you see connection errors in the browser console:
+
+1. **Check nginx error logs**:
+   ```bash
+   tail -f /var/log/nginx/error.log
+   ```
+
+2. **Verify WebSocket headers are being passed**:
+   ```bash
+   curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" https://y.monolith.services
+   ```
+
+3. **Common issues**:
+   - Missing `proxy_http_version 1.1` (WebSockets require HTTP/1.1)
+   - Default 60s timeout causing disconnections
+   - Missing upgrade headers
+   - Buffering enabled (causes delays)
+
+## Monitoring
 
 ```bash
 # Check container status
